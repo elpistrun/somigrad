@@ -1,0 +1,201 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hinit/fireworks/entities/gf2_battery_pellet_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad\\lua\\hinit\\fireworks\\entities\\gf2_battery_pellet_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ENT = oop.Reg("gf2_battery_pellet","base_entity")
+if not ENT then return end
+
+ENT.Spawnable		            	 =  false         
+ENT.AdminSpawnable		             =  false         
+
+ENT.PrintName		                 =  ""       
+ENT.Author			                 =  ""     
+ENT.Contact			                 =  "" 
+ENT.Category                         =  ""           
+
+ENT.Model                            =  "models/gf2/rogue_cheney/misc/pellet.mdl"            
+ENT.Effect                           =  ""            
+ENT.EffectAir                        =  ""            
+ENT.EffectWater                      =  ""           
+ENT.ExplosionSound                   =  ""           
+ENT.ParticleTrail                    =  ""
+
+
+ENT.ExplosionDamage                  =  0                      
+ENT.ExplosionRadius                  =  0                
+ENT.Life                             =  20            
+ENT.MaxDelay                         =  2             
+ENT.TraceLength                      =  500          
+ENT.ImpactSpeed                      =  500      
+ENT.Mass                             =  50       
+            
+ENT.ShouldIgnite                     =  true    
+ENT.ExplodeDelay                     =  3
+
+ENT.GBOWNER                          =  nil             -- don't you fucking touch this.
+
+function ENT:Initialize()
+	if (SERVER) then
+		self:LoadModel()
+		self:PhysicsInit( SOLID_VPHYSICS )
+		self:SetSolid( SOLID_VPHYSICS )
+		self:SetMoveType( MOVETYPE_VPHYSICS )
+		self:SetUseType( ONOFF_USE ) -- doesen't fucking work
+		local phys = self:GetPhysicsObject()
+		local skincount = self:SkinCount()
+		if (phys:IsValid()) then
+			phys:SetMass(self.Mass)
+			phys:Wake()
+		end
+		if (skincount > 0) then
+			self:SetSkin(math.random(0,skincount))
+		end
+		self.Exploded = false
+
+	
+		
+		
+	end
+end
+
+function ENT:Think()
+	if (SERVER) then
+		if self.HasSetUp then return end
+		if self.HasSetUp==nil then self.HasSetUp=true end
+		self:SetUp()
+		self:NextThink(CurTime() + 0.01)
+		return true
+	end
+end
+
+function ENT:SetUp()
+	timer.Simple(self.Info["ExplosionDelay"], function()
+		if !self:IsValid() then return end
+		self.Exploded=true
+		self:Explode()
+	end)
+	
+	if self.Info["Trail"]!= nil && self.Info["Trail"]!="" && self.Trail==nil then ParticleEffectAttach(self.Info["Trail"], PATTACH_ABSORIGIN_FOLLOW,self,1) end
+end
+
+function ENT:LoadModel()
+	self:SetModel(self.Model)
+end
+
+
+
+function ENT:Explode_Sound()
+	if self.PlayedExploSound!=nil then return end
+	if self.PlayedExploSound==nil then self.PlayedExploSound=true end
+	local pos = self:GetPos()
+	local ent = ents.Create("gf2_shockwave_sound_lowsh")
+	ent:SetPos(pos)
+	ent:Spawn()
+	ent:Activate()
+	ent.MAX_RANGE = 50000
+	ent.SHOCKWAVE_INCREMENT = 100
+	if self.Info["MatchSoundwithEffect"]==true && self.Info["Trail_as_Firework"]==false then 
+		ent.SOUND = self.Info["Effect_Sound"][self.Effect]
+	elseif self.Info["Trail_as_Firework"]==true then
+		ent.SOUND = self.Info["Trail_Sound"][self.Trail]
+	else 
+		ent.SOUND = table.Random(self.Info["ExplosionSound"])
+	end
+	ent.ShakeSettings = { ["ShakeTime"] = 0.2,
+						["SoundAmp"] = 5,
+						["SoundFreq"] = 5}
+						  
+end
+
+function ENT:EmitFlash()
+--[[
+	local ent = ents.Create("gf2_emitlight_firework")
+	 
+	 
+	local tr = util.TraceLine( {
+		start = self:GetPos(),
+		endpos = self:GetPos()-Vector(0,0,8000),
+	} )
+	ent:SetPos( tr.HitPos ) 
+	ent:Spawn()
+	ent:Activate()
+	ent.RGB_Variable = {["red"] = 255, ["green"] = 112, ["blue"] = 50}
+	ent.Life = 0.2
+	ent.Distance=5000
+	ent.Brightness = math.random(1,6)
+	--]]
+end
+
+function ENT:Explode()
+	if !self.Exploded then return end
+	local pos = self:GetPos()
+	self.Effect = table.Random(self.Info["Effect"])
+	
+	if self.Effect!="" then ParticleEffect(self.Effect,pos,Angle(0,0,0),nil) end -- preventing crappy console massages for you since 1998
+	
+	
+	self:Explode_Sound()
+	self:EmitFlash()
+	
+	Shockwave(self.Attacker, self:GetPos(), {0,25}, 500, 255)
+    
+	self:StopParticles()
+
+
+	self:Remove()
+end
+
+function ENT:OnTakeDamage(dmginfo)
+     if self.Exploded then return end
+     self:TakePhysicsDamage(dmginfo)
+	 
+     if (self.Life <= 0) then return end
+
+	 if self:IsValid() then
+	     self.Life = self.Life - dmginfo:GetDamage()
+		 if (self.Life <= self.Life/2) and !self.Exploded and self.Flamable then
+		     self:Ignite(self.MaxDelay,0)
+		 end
+		 if (self.Life <= 0) then 
+		     timer.Simple(math.Rand(0,self.MaxDelay),function()
+			     if !self:IsValid() then return end 
+			     self.Exploded = true
+			     self:Explode()
+			 end)
+	     end
+	end
+end
+
+function ENT:PhysicsCollide( data, physobj )
+	if self.Exploded then return end
+	self.Exploded=true
+	self:Explode()
+end
+
+function ENT:OnRemove()
+	 self:StopParticles()
+end
+
+if ( CLIENT ) then
+     function ENT:Draw()
+         self:DrawModel()
+     end
+end

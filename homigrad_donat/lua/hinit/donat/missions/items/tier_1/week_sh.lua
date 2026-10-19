@@ -1,0 +1,121 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad_donat/lua/hinit/donat/missions/items/tier_1/week_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad_donat\\lua\\hinit\\donat\\missions\\items\\tier_1\\week_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local Mission = MissionItem_Reg("week","day")
+if not Mission then return end
+
+Mission.raryType = "rary"
+Mission.Category = "mission_category_2"
+Mission.ResetTime = 60 * 60 * 24 * 7 - 6 * 60 * 60 * 6
+
+Mission.Config = {
+    ended = {
+        name = "donat_mission_week1",
+        max = MissionLimits.week - 1,
+        Think1 = function(self)
+            local count = 0
+
+            for id,mission in pairs(MissionList[self.owner]) do
+                if mission.class != self.class then continue end
+                if mission.data.canComplete then count = count + 1 end
+            end
+
+            self:SetProgress(count)
+        end,
+        items = MissionWeekItems
+    },
+    {
+        name = "donat_mission_week2",
+        desc = "donat_mission_week2_desc",
+        PlayerKill = function(self,ply,dmgTab)
+            if self.max and ply != dmgTab.att and ply.roleT then
+                self.progress = (self.progress or 0) + 1
+            end
+        end,
+        RoundStart = function(self)
+            if #PlayersInGame() >= 20 then self.max = true end
+
+            self.progress = 0
+        end,
+        RoundEnd = function(self)
+            if traitors and #traitors == self.progress then self:WriteCanComplete() end
+        end
+    },
+    {
+        name = "donat_mission_week3",
+        desc = "donat_mission_week3_desc",
+        PlayerKill = function(self,ply,dmgTab)
+            if ply != dmgTab.att and self.ownerPly.fake then
+                self:WriteCanComplete()
+            end
+        end
+    },
+    {
+        name = "donat_mission_week4",
+        desc = "donat_mission_week4_desc",
+        PlayerKill = function(self,ply,dmgTab)
+            if ply != dmgTab.att and self.ownerPly.fake and dmgTab.hitgroup == HITGROUP_HEAD then
+                self:WriteCanComplete()
+            end
+        end
+    },
+    {
+        name = "donat_mission_week5",
+        RoundEnd = function(self,winner)
+            local owner = player.GetBySteamID64(self.owner)
+            if roundActiveName == "level_dm" and winner == owner then
+                self:WriteCanComplete()
+            end
+        end,
+    },
+    {
+        name = "donat_mission_week6",
+        FindTraitor = function(self)
+            self:WriteCanComplete()
+        end
+    },
+    {
+        name = "donat_mission_week7",
+        desc = "donat_mission_week7_desc",
+        PlayerKill = function(self,ply,dmgTab)
+            if
+                self.max and
+                ply != dmgTab.att and
+                ply != dmgTab.parentExplosive and
+                dmgTab.isExplosive and
+                dmgTab.wep == "explosive_hidebomb" and
+                IsValid(dmgTab.parentExplosive) and
+                dmgTab.parentExplosive:IsPlayer()
+            then
+                self:AddProgress(1)
+            end
+        end,
+        RoundStart = function(self)
+            self:SetMax(self.ownerPly.roleT and 2 or false)
+        end
+    }
+}
+

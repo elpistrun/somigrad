@@ -1,0 +1,53 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/wac/lua/wac/aircraft.lua <
+    > Callstack: addons/wac/lua/autorun/wac_aircraft_input.lua:2 <
+]]
+
+
+include "wac/base.lua"
+include "wac/keyboard.lua"
+
+wac.menu.aircraft = "Aircraft"
+
+
+wac.aircraft = wac.aircraft or {
+	
+	version = "339",
+	
+	spawnCategory = "WAC Aircraft",
+
+	addControls = function(category, t)
+		local c
+		for i, t in pairs(wac.aircraft.controls) do
+			if t.name == category then
+				c = t
+			end
+		end
+		if not c then
+			c = { name = category, list = {} }
+			table.insert(wac.aircraft.controls, c)
+		end
+
+		for name, control in pairs(t) do
+			control[2] = control[2] or KEY_NONE
+			c.list[name] = control
+		end
+	end,
+
+	controls = {},
+
+	initialize = function()
+		if not wac.aircraft.initialized then
+			wac.aircraft.initialized = true
+			hook.Run("wacAirAddInputs")
+		end
+	end,
+
+}
+

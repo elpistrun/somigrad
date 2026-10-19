@@ -1,0 +1,112 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgame/tier_1/ent_drop_flashlight_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:115
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad/lua/hgame/tier_1/ent_drop_flashlight_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:4 <
+]]
+
+-- "addons\\homigrad\\lua\\hgame\\tier_1\\ent_drop_flashlight_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ENT = oop.Reg("ent_drop_flashlight","base_entity")
+if not ENT then return end
+
+ENT.Type = "anim"
+ENT.Author = "0oa"
+ENT.Spawnable = true
+ENT.AdminSpawnable = false
+
+ENT.PrintName = L("ent_drop_flashlight")
+ENT.Category = "Homigrad"
+
+ENT.WorldModel = "models/maxofs2d/lamp_flashlight.mdl"
+ENT.DrawWeaponSelection = DrawWeaponSelection
+ENT.OverridePaintIcon = OverridePaintIcon
+
+ENT.itemType = "other"
+
+ENT.dwsItemPos = Vector(3,0,0)
+ENT.dwsItemAng = Angle(0,0,0)
+ENT.dwsItemFOV = -4
+
+if SERVER then
+    function ENT:Initialize()
+        self:SetModel("models/hunter/plates/plate025.mdl")
+        self:PhysicsInit(SOLID_VPHYSICS)
+        self:SetMoveType(MOVETYPE_VPHYSICS)
+        self:SetSolid(SOLID_VPHYSICS)
+
+        self:PhysWake()
+        self:DrawShadow(false)
+    end
+
+    function ENT:Use(ply)
+        ItemPickup(ply,self,"use")
+    end
+
+    function ENT:InvInsertItem(slot,item)
+        local parent = slot.inv.parent
+
+        if IsValid(parent) and parent:IsPlayer() then parent.allowFlashlights = true end
+    end
+    
+    function ENT:InvPopItem(item)
+        local parent = item.inv//берём прошлый инвентарь
+        if not parent then return end
+        parent = parent.parent
+     
+        if parent:IsPlayer() then
+            for i,item in pairs(item.inv:GetAllItems()) do
+                if item.ent == self then continue end
+                if item.ent:GetClass() == self:GetClass() then return end
+            end
+
+            if parent.invDumping then
+                for i,item in pairs(parent.invDumping:GetAllItems()) do
+                    if item.ent == self then continue end
+                    if item.ent:GetClass() == self:GetClass() then return end
+                end
+            end
+
+            parent.allowFlashlights = false
+            parent:Flashlight(false)
+        end
+
+         parent:SetNWBool("Flashlight",false)
+    end
+else
+    local rot = Angle(90,0,0)
+    
+    function ENT:Draw()
+        local ent,create = CSMById("models/maxofs2d/lamp_flashlight.mdl",tostring(self))
+
+        if create then
+            local mat = Matrix()
+            mat:Scale(Vector(0.5,0.5,0.5))
+            ent:EnableMatrix("RenderMultiply",mat)
+        end
+
+        ent:SetPos(self:GetPos())
+        ent:SetAngles(self:GetAngles():Rotate(rot))
+        ent:DrawModel()
+    end
+
+    local white = Color(255,255,255)
+
+    function ENT:HUDTarget(ply,k,w,h)
+        white.a = 255 * k * (1 - InvOpenK)
+
+        draw.SimpleText(L(self.PrintName),"H.18",w / 2,h / 2 - 50 * (1 - k),white,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)
+    end
+end

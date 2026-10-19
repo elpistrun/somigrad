@@ -1,0 +1,175 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hinit/fireworks/entities/gf2_misc_chinese_candle_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad\\lua\\hinit\\fireworks\\entities\\gf2_misc_chinese_candle_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ENT = oop.Reg("gf2_misc_chinese_candle","gf2_base_adv")
+if not ENT then return end
+
+ENT.Spawnable		= true
+ENT.AdminOnly		= false
+
+ENT.PrintName		                 =  "Chinese Candle"
+ENT.Author			                 =  "Rogue Cheney"
+ENT.Contact		                     =  "baldursgate3@gmail.com"
+ENT.Category                         =  "G-Works 2 - Misc"
+
+ENT.Model                            =  "models/models/gf2/rogue_cheney/misc/chinese_candle.mdl"                      
+
+ENT.Mass                             =  50
+
+ENT.GBOWNER                          =  nil             
+
+function ENT:SpawnFunction( ply, tr )
+     if ( !tr.Hit ) then return end
+	 self.GBOWNER = ply
+     local ent = ents.Create( self.ClassName )
+	 ent:SetPhysicsAttacker(ply)
+     ent:SetPos( tr.HitPos + tr.HitNormal * 16 ) 
+     ent:Spawn()
+     ent:Activate()
+
+     return ent
+end
+
+
+function ENT:Initialize()
+	if (CLIENT) then
+		self.Light_TargRange = 450
+		self.Light_Range     = 10
+
+
+	end
+	if (SERVER) then
+		self:LoadModel()
+		self:PhysicsInit( SOLID_VPHYSICS )
+		self:SetSolid( SOLID_VPHYSICS )
+		self:SetMoveType( MOVETYPE_VPHYSICS )
+		self:SetUseType( ONOFF_USE ) 
+		local phys = self:GetPhysicsObject()
+		local skincount = self:SkinCount()
+		if (phys:IsValid()) then
+		phys:SetMass(self.Mass)
+		phys:Wake()
+		end
+
+		self.Armed    = false
+		self.Exploded = false
+		self.Used     = false
+		self.Arming   = false
+		self:SetSkin(0)
+		
+		self.IgnitionStack = 0
+		self.BurningTime   = 0
+		self.HasBurned     = false
+		
+
+	end
+end
+
+
+
+
+if ( CLIENT ) then
+	
+	function ENT:Draw()
+		self:DrawModel()
+	
+		if !(WireAddon == nil) then Wire_Render(self.Entity) end
+	end
+end
+
+function ENT:TriggerInput(iname, value)
+     if (!self:IsValid()) then return end 
+end 
+
+function ENT:SearchforFlame()
+	for k, v in pairs(ents.FindInSphere(self:GetAttachment(self:LookupAttachment("wig_attachment")).Pos, 6)) do
+		if (v:GetClass()=="gf2_misc_matchhead" or v:GetClass()==self:GetClass()) and v.HasBurned!=true and self.HasBurned==false and self.IsBurning!=true and v.IsBurning==true then
+			ParticleEffectAttach( "matchhead_infinite_startup", PATTACH_POINT_FOLLOW, self, self:LookupAttachment("wig_attachment") )
+			self.IgnitionStack = math.Clamp(self.IgnitionStack + 0.1 - (math.random(10/20)/100), 0, 2)
+			if self.IgnitionStack>=2 then self.IsBurning=true self:SetNWBool("IsBurning", true) ParticleEffectAttach( "matchhead_ignition_infinite_main", PATTACH_POINT_FOLLOW, self, self:LookupAttachment("wig_attachment") ) self:EmitSound("garrys_fireworks_2/fireworks/misc/flameup.wav", 50, 100) end
+		end
+	end
+end
+
+function ENT:Think()
+	if (CLIENT) then
+		
+		if self:GetNWBool("IsBurning", nil)==true then
+			local dlight = DynamicLight( self:EntIndex() )
+		
+			self.Light_Range = self.Light_Range + ( (self.Light_TargRange-self.Light_Range) /math.random(150,250))
+			if ( dlight ) then
+				
+		
+				dlight.pos = self:GetPos()
+				dlight.r = 255
+				dlight.g = 85
+				dlight.b = 0
+				dlight.brightness = 0.5
+				dlight.Decay = 1000
+				dlight.Size = self.Light_Range 
+				dlight.Style = 6
+				dlight.DieTime = CurTime() + 0.1
+			end
+		end
+	end
+	if (SERVER) then
+		if !self:IsValid() then return end
+		if self.IsBurning==true then
+			self.BurningTime=self.BurningTime + engine.TickInterval()/0.1
+			
+		end
+		
+		
+		if self.BurningTime > 99965 then
+			self:StopParticles()
+			self:SetNWBool("IsBurning", false)
+			self.IsBurning=false
+			self.HasBurned=true
+		end
+		
+		self:SearchforFlame()
+			
+		
+	end
+end
+
+function ENT:Explode()
+     if !self.Exploded then return end
+	self:Remove()
+end
+
+function ENT:OnTakeDamage(dmginfo)
+     if self.Exploded then return end
+end
+
+function ENT:PhysicsCollide( data, physobj )
+end
+
+function ENT:Arm()
+end	 
+
+function ENT:Use( activator, caller )
+     
+end
+
+

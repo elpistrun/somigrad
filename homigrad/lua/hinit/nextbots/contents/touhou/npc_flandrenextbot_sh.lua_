@@ -1,0 +1,54 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hinit/nextbots/contents/touhou/npc_flandrenextbot_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:115
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad/lua/hinit/nextbots/contents/touhou/npc_flandrenextbot_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad\\lua\\hinit\\nextbots\\contents\\touhou\\npc_flandrenextbot_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ENT = oop.Reg("npc_flandrenextbot","npc_fumo")
+if not ENT then return end
+
+if SERVER then resource.AddWorkshop("2828445664") end
+
+ENT.PrintName = "flandrenextbot"
+ENT.IconOverride = "homigrad/scp/touhou/flandre.png"
+
+ENT.Speed = 800
+ENT.Acceleration = 800
+ENT.Deceleration = 800
+
+ENT.FastSpeed = 1250
+ENT.FastAcceleration = 1250
+ENT.FastDeceleration = 1250
+
+ENT.JumpSound = Sound("homigrad/scp/sakuya/jump.mp3")
+ENT.JumpHighSound = Sound("homigrad/scp/yuyuko/spring.wav")
+
+ENT.AttackSounds = {
+	Sound("homigrad/scp/flandre/pieceofcake.mp3"),
+}
+
+ENT.Music = Sound("npc_flandrenextbot/panic.mp3")
+ENT.SpriteMat = Material("homigrad/scp/touhou/flandre.png","smooth mips")
+

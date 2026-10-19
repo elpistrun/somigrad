@@ -1,0 +1,44 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgame/tier_2_entities/granade/tier_1_content/flashbang_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:115
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad/lua/hgame/tier_2_entities/granade/tier_1_content/flashbang_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:4 <
+]]
+
+-- "addons\\homigrad\\lua\\hgame\\tier_2_entities\\granade\\tier_1_content\\flashbang_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local SWEP = oop.Reg("wep_gnade_flashbang","wep_gnade_base")
+if not SWEP then return end
+
+SWEP.PrintName = L("wep_gnade_flashbang")
+SWEP.Instructions = L("wep_gnade_flashbang_desc")
+
+SWEP.WorldModel = "models/jmod/explosives/grenades/flashbang/flashbang.mdl"
+
+SWEP.Granade = "ent_gnade_flashbang"
+
+SWEP.dwsItemFOV = -12
+SWEP.dwsItemPos = Vector(0,0,-1.5)
+
+SWEP.EnableTransformModel = true
+
+SWEP.wmVector = Vector(5,2,1)
+SWEP.wmAngle = Angle(0,180,0)
+
+SWEP.ExplosiveClass = "explosive_flashbang"

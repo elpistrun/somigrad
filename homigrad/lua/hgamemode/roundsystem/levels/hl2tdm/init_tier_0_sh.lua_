@@ -1,0 +1,125 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgamemode/roundsystem/levels/hl2tdm/init_tier_0_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:117
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad/lua/hgamemode/roundsystem/levels/hl2tdm/init_tier_0_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:8 <
+]]
+
+-- "addons\\homigrad\\lua\\hgamemode\\roundsystem\\levels\\hl2tdm\\init_tier_0_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local Level = oop.Reg("level_hl2tdm","level_base",true)
+if not Level then return INCLUDE_BREAK end
+
+Level.ShouldSpawnLoot = true
+Level.PropBreakLoot = true
+Level:SetEndType("team")
+
+local models = {}
+
+for i = 1,6 do models[#models + 1] = "models/player/group03/female_0" .. i .. ".mdl" end
+for i = 1,9 do models[#models + 1] = "models/player/group03/male_0" .. i .. ".mdl" end
+
+Level.red = {"hl2tdm_rebels",Color(225,95,60),
+	weapons = {"med_band","med_kit","med_painkiller","weapon_transmitter"},
+	classes = {
+		{
+			"class_scout",
+			main_weapon = {"wep_smg1","wep_mp7","wep_mp5"},
+			armors = {
+				{"ent_jack_gmod_ezarmor_interceptor",Color(255,255,255)},
+				{"ent_jack_gmod_ezarmor_commandoblack",Color(255,255,255)}
+			}
+		},
+		{
+			"class_support",
+			main_weapon = {"wep_870"},
+			armors = {
+				{"ent_jack_gmod_ezarmor_interceptor",Color(255,255,255)},
+				{"Medium-Helmet",Color(255,255,255)},
+				{"ent_jack_gmod_ezarmor_commandoblack",Color(255,255,255)}
+			}
+		}
+	},
+	secondary_weapon = {"wep_pistol"},
+	models = models
+}
+
+Level.blue = {"hl2tdm_combine",Color(75,75,225),
+	weapons = {"weapon_transmitter","med_band","med_kit","med_painkiller","wep_gnade_hl2"},	
+	classes = {
+		{
+			"class_solder",
+			main_weapon = {
+				"wep_ar2"
+			},
+			models = {"models/player/combine_super_soldier.mdl",nil,true}
+		},
+		{
+			"class_support",
+			main_weapon = {
+				"wep_stotgun"
+			},
+			models = {"models/player/combine_soldier_prisonguard.mdl",nil,true}
+		}
+	},
+	secondary_weapon = {"wep_pistol"},
+	models = {"models/player/combine_soldier.mdl",nil,true},
+	armors = {{"Light-Vest",Color(0,0,0,0)}}
+}
+
+Level.teamEncoder = {
+	[1] = "red",
+	[2] = "blue"
+}
+
+if SERVER then return end
+
+local cgreen = Color(155,155,155)
+local cgray = Color(255,255,255)
+local cname = Color(0,0,0)
+
+function Level:DrawScreen(lply,k)
+    local name,color = self:GetTeamName(lply)
+
+    local w,h = ScrW(),ScrH()
+
+    cname.r = color.r
+    cname.g = color.g
+    cname.b = color.b
+    cname.a = k * 255
+
+	cgray.a = k * 255
+	cgreen.a = k * 255
+
+	draw.DrawText(L("you",L(lply:GetNWString("ClassName"))),"H.25",w / 2,h / 2 - h / 6,cname,TEXT_ALIGN_CENTER)
+ 
+	draw.DrawText(L("you_team",L(name)),"H.25",w / 2,h / 2,cname,TEXT_ALIGN_CENTER)
+	draw.DrawText(L("level_hl2tdm"),"H.45",w / 2,h / 8,cgreen,TEXT_ALIGN_CENTER)
+
+	draw.DrawText(L("hl2tdm_loadscreen"),"H.25",w / 2,h/ 1.2,cgray,TEXT_ALIGN_CENTER)
+end
+
+function Level:HUDPaint(white)
+	if self:DrawLoadScreen() then return end
+
+	self:DrawRoundTime()
+	self:DrawCenter()
+end

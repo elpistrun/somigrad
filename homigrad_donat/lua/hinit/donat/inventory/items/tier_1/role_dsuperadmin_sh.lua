@@ -1,0 +1,48 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad_donat/lua/hinit/donat/inventory/items/tier_1/role_dsuperadmin_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad_donat\\lua\\hinit\\donat\\inventory\\items\\tier_1\\role_dsuperadmin_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ITEM = DonatItem_Reg("role_dsuperadmin","role_base")
+if not ITEM then return end
+
+ITEM.AdminPanelRoleName = "dsuperadmin"
+
+ITEM.Name = "DSUPERADMIN"
+ITEM.WorldModel = "models/weapons/arccw_go/w_eq_smokegrenade_thrown.mdl"
+ITEM.WorldVector = Vector(100,0,0)
+
+ITEM.Color = Color(31,139,76)
+ITEM.RaryType = "epic"
+
+ITEM.Config = {
+    [1] = {
+        desc = "donat_item_role_dsuperadmin1_desc",
+        time = 60 * 60 * 24 * 30
+    },
+    [2] = {
+        desc = "donat_item_role_dsuperadmin2_desc",
+        time = 60 * 60 * 24 * 30 * 12
+    }
+}

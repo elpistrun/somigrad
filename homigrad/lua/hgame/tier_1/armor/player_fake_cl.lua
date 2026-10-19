@@ -1,0 +1,48 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgame/tier_1/armor/player_fake_cl.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:4 <
+]]
+
+-- "addons\\homigrad\\lua\\hgame\\tier_1\\armor\\player_fake_cl.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local PLY = oop.RegConnect("player_fake")
+if not PLY then return end
+
+PLY:Event_Add("Init","Armors",function(self)
+    self.Armors = {}
+    self.ArmorRender = {}
+end)
+
+function PLY:AddArmor(armor,col)
+    local tbl = self.Armors
+
+    tbl[#tbl + 1] = {
+        name = Armor_GetValidName(armor),
+        col = col
+    }
+
+    self.ArmorRender = Armor_SetupRender(Armor_GetBuildSpecsFromArmors(tbl))
+    if IsValid(self.mdl) then self.mdl.ArmorRender = self.ArmorRender end
+end
+
+function PLY:ClearArmors()
+    self.Armors = {}
+    self.ArmorRender = {}
+    if IsValid(self.mdl) then self.mdl.ArmorRender = self.ArmorRender end
+end
+
+PLY:Event_Add("Create CSM","Armor",function(self,mdl)
+    mdl.ArmorRender = self.ArmorRender
+end)

@@ -1,0 +1,79 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgame/tier_2_entities/other/weapon_taser/tier_0_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:117
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad/lua/hgame/tier_2_entities/other/weapon_taser/tier_0_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:4 <
+]]
+
+-- "addons\\homigrad\\lua\\hgame\\tier_2_entities\\other\\weapon_taser\\tier_0_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local SWEP = oop.Reg("weapon_taser","hg_wep_base",true)
+if not SWEP then return INCLUDE_BREAK end
+
+SWEP.PrintName = L("weapon_taser")
+SWEP.Author = "Homigrad"
+
+SWEP.Slot = 2
+SWEP.SlotPos = 4
+SWEP.Spawnable = true
+SWEP.Category = L("weapon_category_item")
+
+SWEP.WorldModel = "models/realistic_police/taser/w_taser.mdl"
+
+SWEP.Primary.ClipSize = 1
+SWEP.Primary.DefaultClip = 1
+SWEP.Primary.Automatic = false
+SWEP.Primary.Ammo = "AR2AltFire"
+
+SWEP.DrawWeaponSelection = DrawWeaponSelection
+SWEP.OverridePaintIcon = OverridePaintIcon
+
+SWEP.dwsItemAng = Angle(0,-10,0)
+SWEP.dwsItemPos = Vector(-3.5,0,-1.8)
+SWEP.dwsItemFOV = -14
+
+SWEP.dwmUp = 0.5
+SWEP.dwmRight = 0
+SWEP.dwmForward = 0
+
+SWEP.dwmARight = 180
+SWEP.dwmAUp = 200
+SWEP.dwmAForward = 0
+SWEP.HoldType = "revolver"
+
+SWEP.itemType = "other"
+
+SWEP.EnableTransformModel = true
+
+SWEP.wmVector = Vector(0,0,0)
+SWEP.wmAngle = Angle(-20,0,185)
+
+if SERVER then return end
+
+function SWEP:Render(gun)
+	gun:DrawModel()
+end
+
+function SWEP:AnimationBonesPlayer(rag,ft,time)
+	local anim = math.Clamp(self:GetNWFloat("Start",0) - CurTime() + 0.2,0,0.2) / 0.2
+
+	rag:AddBoneAng("rhand",Angle(45,0,0):Mul(anim))
+end

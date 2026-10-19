@@ -1,0 +1,2 @@
+-- Grab hand icons live in main_cl.lua (HUDPaint "Fake").
+-- This file used to replace that hook and hid the icons behind hg_casual.

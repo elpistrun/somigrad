@@ -1,0 +1,131 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad_core/lua/shlib/tier_2_world/render/player_fake_cl.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/shlib.lua:5 <
+]]
+
+-- "addons\\homigrad_core\\lua\\shlib\\tier_2_world\\render\\player_fake_cl.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local PLY = oop.Reg("player_fake","lib_event")
+if not PLY then return end
+
+PLY:Event_Add("Init","Main",function(self)
+    self.weapons = {}
+end)
+
+PLY:Event_Add("Create CSM","Main",function(self,mdl)
+    mdl:SetNoDraw(true)
+    mdl:SetIK(false) 
+    mdl.GetPlayerColor = function() return self:GetPlayerColor() end
+
+    self:SetBodygroups(self.bodygroups)
+
+    mdl.GetActiveWeapon = function() return self:GetActiveWeapon() end
+    mdl.GetWeapons = function() return self:GetWeapons() end
+    mdl.IsSpeaking = function() return false end
+end)
+
+// Weapons
+
+local example_wep = {}
+
+function example_wep:GetNWString(key,def) return def end
+function example_wep:GetNWFloat(key,def) return def end
+function example_wep:GetNWBool(key,def) return def end
+
+function PLY:AddWeapon(wep)
+    wep = weapons.Get(wep)
+    if not wep then return end
+    
+    for k,v in pairs(example_wep) do wep[k] = v end
+    
+    wep.GetOwner = function() return self.mdl end
+
+    self.weapons[#self.weapons + 1] = wep
+end
+
+function PLY:ClearWeapons() self.weapons = {} end
+function PLY:GetWeapons() return self.weapons end
+
+function PLY:SetActiveWeapon(wep) self.activeWeapon = wep end
+function PLY:GetActiveWeapon() return self.activeWeapon end
+
+// Model
+
+function PLY:GetCSM()
+    local mdl,isCreate = CSMById(self.mdlpath,tostring(self) .. "player_fake" .. self.mdlpath .. self.tag)
+
+    if isCreate then
+        self.mdl = mdl
+        
+        self:Event_Call("Create CSM",mdl)
+    end
+
+    return mdl,isCreate
+end
+
+function PLY:SetModel(mdlpath)
+    self.mdlpath = mdlpath
+    if IsValid(self.mdl) then self.mdl:Remove() end
+end
+
+function PLY:SetColor(color) self.color = color:ToVector() end
+
+local empty = {}
+
+function PLY:SetBodygroups(list)
+    self.bodygroups = list
+
+    local mdl = self.mdl
+    if not IsValid(mdl) then return end
+
+    for i,value in pairs(self.bodygroups or empty) do mdl:SetBodygroup(i,value) end
+end
+
+// Util
+
+function PLY:Team() return self.team end
+function PLY:GetNWString(key,def) return def end
+
+// Render
+
+function PLY:GetPlayerColor() return self.color end
+function PLY:DrawModel(mdl)
+    mdl:DrawModel()
+end
+
+function PLY:Draw(panel,w,h,fov)
+    local x,y = panel:LocalToScreen()
+    
+    CreateScrene(x,y,w,h,27 + (fov or 0),Vector(110,0,35),Angle(0,180,0),1,512)
+        local mdl = self:GetCSM()
+        mdl:ResetSequence(mdl:LookupSequence("walk_all"))
+
+        self:DrawModel(mdl)
+        event.Call("PlayerDraw",mdl,"vgui")
+    CloseScene()
+end
+
+function Create_Player_Fake(mdlpath,tag)
+    local fakePly = {
+        tag = tag or "",
+        mdlpath = mdlpath
+    }
+
+    for k,v in pairs(PLY) do fakePly[k] = v end
+
+    fakePly:Event_Call("Init")
+
+    return fakePly,isCreate
+end

@@ -1,0 +1,42 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad_donat/lua/hinit/donat_seasons/25_7/halflife_pass/tier_0_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad_donat\\lua\\hinit\\donat_seasons\\25_7\\halflife_pass\\tier_0_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ITEM = DonatItem_Reg("halflife_pass","role_base",true)
+if not ITEM then return INCLUDE_BREAK end
+
+ITEM.RaryType = "common"
+ITEM.Color = Color(255,125,0)
+ITEM.Name = "HALFLIFE 2 COOP PASS"
+ITEM.Desc = "Боевой пропуск на сервер с режимом HalfLife 2 Coop\nроходите уровни халф лайфа и зарабатывайте валюту за переход на следующую карту и убийства враждебных NPC."
+
+ITEM.WorldModel = "models/weapons/w_crowbar.mdl"
+ITEM.WorldVector = Vector(30,-1.3,-3)
+ITEM.WorldAngle = Angle(45,-90,180)
+
+ITEM.ActivatedTitle = "Вы активировали пропуск!"
+
+function ITEM:GetTimeLess() return 60 * 60 * 6 end
+
+if SERVER then return end
+

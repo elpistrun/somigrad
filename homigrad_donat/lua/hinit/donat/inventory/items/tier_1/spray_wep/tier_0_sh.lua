@@ -1,0 +1,101 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad_donat/lua/hinit/donat/inventory/items/tier_1/spray_wep/tier_0_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad_donat\\lua\\hinit\\donat\\inventory\\items\\tier_1\\spray_wep\\tier_0_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local SWEP = oop.Reg("wep_spray","weapon_per4ik",true)
+if not SWEP then return INCLUDE_BREAK end
+
+SWEP.PrintName = "Spray"
+SWEP.Author = "0oa"
+SWEP.Instructions = "На одно использование"
+
+function SWEP:SetupDataTables()
+    self:NetworkVar("String","URL")
+    self:NetworkVar("String","CreatorSteamID")
+
+    self:NetworkVar("Float","Width")
+    self:NetworkVar("Float","Height")
+end
+
+function SWEP:GetTrace()
+    local Pos,Ang = self:GetTransformFromRagdoll(rag)
+
+    local trace = {
+        start = Pos,
+        endpos = Pos - Vector(0,PlayerDisUse,0):Rotate(Ang),
+        filter = rag
+    }
+
+    trace = util.TraceLine(trace)
+    
+    if not trace.Hit or not trace.HitWorld then return end
+
+    local pos,ang = trace.HitPos,trace.HitNormal:Angle()
+
+    ang:RotateAroundAxis(ang:Right(),-90)
+    ang:RotateAroundAxis(ang:Up(),90)
+
+    return pos,ang
+end
+
+if SERVER then return end
+
+function SWEP:Render(gun)
+    gun:DrawModel()
+
+    self:DrawWorldModelPost(gun)
+
+    if not self:IsLocal() or LocalPlayer():GetActiveWeapon() != self then return end
+
+    local pos,ang = self:GetTrace()
+    if not pos then return end
+
+    ImageTool:Start3D2D({
+        position = pos,
+        angles = ang,
+        url = self:GetURL(),
+
+        width = self:GetWidth(),
+        height = self:GetHeight(),
+
+        alpha = 125
+    })
+end
+
+function SWEP:DrawHUD()
+    local pos,ang = self:GetTrace()
+
+    local w,h = ScrW(),ScrH()
+
+    if not pos then
+        draw.SimpleText("Стены не найдено","HS.25",w/2,h * 0.9,nil,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)
+        
+        return
+    else
+        draw.SimpleText("Нанести рисунок","HS.25",w/2,h * 0.9,nil,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)
+    end
+end

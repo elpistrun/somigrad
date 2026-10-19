@@ -1,0 +1,95 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgame/tier_2_entities/tier_0_hg_wep_base/tier_0_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:117
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad/lua/hgame/tier_2_entities/tier_0_hg_wep_base/tier_0_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:4 <
+]]
+
+-- "addons\\homigrad\\lua\\hgame\\tier_2_entities\\tier_0_hg_wep_base\\tier_0_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local SWEP = oop.Reg("hg_wep_base",{"base_weapon"},true)
+if not SWEP then return INCLUDE_BREAK end
+
+SWEP.Primary.ClipSize		= -1
+SWEP.Primary.DefaultClip	= -1
+SWEP.Primary.Automatic		= true
+SWEP.Primary.Ammo			= "none"
+
+SWEP.Secondary.ClipSize		= -1
+SWEP.Secondary.DefaultClip	= -1
+SWEP.Secondary.Automatic	= true
+SWEP.Secondary.Ammo			= "none"
+
+SWEP.DrawWeaponSelection = DrawWeaponSelection
+SWEP.OverridePaintIcon = OverridePaintIcon
+
+function SWEP:PrimaryAttack() end
+function SWEP:SecondaryAttack() end
+function SWEP:Reload() end
+
+function SWEP:OnInit() end
+function SWEP:OnThink() end
+
+function SWEP:AnimationBonesPlayer() end
+
+//
+
+function SWEP:Initialize()
+	self:DrawShadow(false)
+
+    self:Event_Call("Init")
+	self:OnInit()
+end
+
+function SWEP:Think()
+	local owner,ft,time = self:GetOwner(),FrameTime(),CurTime()
+
+	self:OnThink(owner,ft,time)
+	self:Event_Call("Think",owner,ft,time)
+end
+
+SWEP.MoveMul = 1
+SWEP.MoveMulEquip = 1
+
+event.Add("Move","Homigrad Weapon Base",function(ply,mv)
+	local wep = ply:GetActiveWeapon()
+
+	local mul = wep.MoveMulEquip or 1
+
+	for i,wep in pairs(ply:GetWeapons()) do
+		mul = mul * (wep.MoveMul or 1)
+	end
+
+	local speed = mv:GetMaxSpeed() * mul
+	mv:SetMaxSpeed(speed) 
+	mv:SetMaxClientSpeed(speed)
+end)
+
+if SERVER then
+	function SWEP:ShouldDropOnDie() return false end
+
+	function SWEP:OnDrop()
+		self:PhysicsInit(SOLID_VPHYSICS)
+		self:PhysWake()
+
+		self:OnDropWeapon()
+	end
+
+	function SWEP:OnDropWeapon() end
+end

@@ -1,0 +1,82 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad_donat/lua/hinit/donat/inventory/items/tier_0/base_use/tier_0_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:117
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad_donat/lua/hinit/donat/inventory/items/tier_0/base_use/tier_0_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad_donat\\lua\\hinit\\donat\\inventory\\items\\tier_0\\base_use\\tier_0_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ITEM,NoInherit = DonatItem_Reg("base_use",nil,true)
+if not ITEM then return INCLUDE_BREAK end
+
+NoInherit.doNotShowInUI = true
+
+function ITEM:GetCountUse()
+    return self.data.countUse or 250
+end
+
+if SERVER then return end
+
+function ITEM:DrawCountUse(w,h,panel,desc)
+    local k = 0
+    local shakeX,shakeY = 0,0
+
+    k = math.max((self.startShake or 0) - RealTime() + 0.6,0) / 0.6
+
+    if k > 0 then
+        shakeX,shakeY = math.Rand(-3,3) * k,math.Rand(-3,3) * k
+    end
+
+    if desc then
+        draw.SimpleText("Осталось " .. self:GetCountUse() .. " использований","HS.25",w/2 + shakeX,h - 16 + shakeY,nil,TEXT_ALIGN_CENTER,TEXT_ALIGN_BOTTOM)
+    elseif panel.type != "shop" then
+        draw.SimpleText("Осталось " .. self:GetCountUse(),"HS.12",w/2 + shakeX,8 + shakeY,nil,TEXT_ALIGN_CENTER)
+    end
+end
+
+
+function ITEM:InputUserCommand()
+    local cmd = net.ReadString()
+
+    if cmd == "use" then
+        self.startShake = RealTime()
+        LocalPlayer():EmitSound("homigrad/vgui/panorama/case_unlock_immediate_01.wav",75,125,0.33)
+    elseif cmd == "err" then
+        LocalPlayer():EmitSound("homigrad/vgui/weapon_cant_buy.wav",75,125,0.33)
+        self.error = net.ReadString()
+        self.errorStart = RealTime()
+    end
+
+    if self.InputUserCommandPost then self:InputUserCommandPost(cmd) end
+end
+
+function ITEM:SendUse()
+    self:StartUserCommand("use")
+    net.SendToServer()
+end

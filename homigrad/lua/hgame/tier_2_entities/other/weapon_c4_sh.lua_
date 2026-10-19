@@ -1,0 +1,64 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgame/tier_2_entities/other/weapon_c4_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:115
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad/lua/hgame/tier_2_entities/other/weapon_c4_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:4 <
+]]
+
+-- "addons\\homigrad\\lua\\hgame\\tier_2_entities\\other\\weapon_c4_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local SWEP = oop.Reg("weapon_c4","hg_wep_base")
+if not SWEP then return end
+
+SWEP.PrintName 				= L("weapon_c4")
+SWEP.Author 				= "Homigrad"
+SWEP.Category 				= L("weapon_category_item")
+SWEP.Spawnable 				= true
+
+SWEP.Slot					= 5
+SWEP.SlotPos				= 1
+
+SWEP.WorldModel				= "models/jmod/explosives/bombs/c4/w_c4_planted.mdl"
+
+SWEP.DrawWeaponSelection = DrawWeaponSelection
+SWEP.OverridePaintIcon = OverridePaintIcon
+
+SWEP.dwsItemAng = Angle(90,0,-90)
+SWEP.dwsItemPos = Vector(-3,2,0)
+SWEP.dwsItemFOV = 0
+
+SWEP.InvMoveSnd = InvMoveSndPlastic
+SWEP.itemType = "granade"
+
+SWEP.EnableTransformModel = true
+SWEP.wmVector = Vector(3,2,0)
+SWEP.wmAngle = Angle(0,0,180)
+SWEP.wmScale = 0.5
+
+SWEP.HoldType = "slam"
+
+if SERVER then
+    function SWEP:OnInit()
+        self:SetModelScale(0.5)
+    end
+
+    function SWEP:PrimaryAttack()
+
+    end
+else
+
+end

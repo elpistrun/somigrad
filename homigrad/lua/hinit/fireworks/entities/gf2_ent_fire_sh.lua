@@ -1,0 +1,120 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hinit/fireworks/entities/gf2_ent_fire_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad\\lua\\hinit\\fireworks\\entities\\gf2_ent_fire_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ENT = oop.Reg("gf2_ent_fire","base_entity")
+if not ENT then return end
+
+ENT.Spawnable		            	 =  false         
+ENT.AdminSpawnable		             =  false       
+
+ENT.PrintName		                 =  "Name"        
+
+ENT.GBOWNER                          =  nil            
+
+function ENT:Initialize()
+	if (SERVER) then
+		self:SetModel("models/Combine_Helicopter/helicopter_bomb01.mdl")
+		self:PhysicsInit( SOLID_VPHYSICS )
+		self:SetSolid( SOLID_VPHYSICS )
+		self:SetMoveType( MOVETYPE_VPHYSICS )
+		self:SetUseType( ONOFF_USE ) 
+		local phys = self:GetPhysicsObject()
+		local skincount = self:SkinCount()
+		if (phys:IsValid()) then
+			phys:SetMass(5)
+			phys:Wake()
+		end
+		self:SetCollisionGroup(COLLISION_GROUP_IN_VEHICLE)
+		self:SetMoveType(MOVETYPE_NONE)
+		self:SetNoDraw(true)
+		self.IgnitionTime=0
+
+		
+	end
+end
+
+function ENT:CountFires()
+	local items = 0
+	for k, v in pairs(ents.GetAll()) do
+		if v:GetClass()=="gf2_ent_fire" then
+			items = items + 1
+		end
+	end
+
+	return items
+end
+
+function ENT:Think()
+	if SERVER then
+		if !self:IsValid() then return end
+		if self.ParentEntity:IsValid()==false then
+			self:Remove()
+		end
+		
+		if self.ParentEntity:IsValid()==false then return end
+		self.IgnitionTime=self.IgnitionTime+0.1
+
+		
+		for k, v in pairs(ents.FindInSphere(self.ParentEntity:GetPos(), 50)) do
+			if v:IsNPC() or v:IsPlayer() or !(v:GetPhysicsObject():IsValid()) or string.StartWith(tostring(v:GetClass()), "gb5_") and v:IsOnFire() and v:GetClass()=="gb5_cp_cannon_match" then 
+			else
+				if v:GetClass()=="gf2_matchhead"  and !(v:IsPlayer() or v:IsNPC()) and string.StartWith(tostring(v:GetClass()), "gb5_") then
+				else
+					if math.random(1, 5)==1 then
+									
+						
+						if v.EntFired==nil and v:GetClass()!="gf2_ent_fire" and v:GetClass()!="gf2_matchhead" and self:CountFires()<50 then
+							v.EntFired=true
+							v:Ignite(15, 0)		
+							local fire = ents.Create("gf2_ent_fire")
+							fire:SetPos( self:GetPos() ) 
+							fire:Spawn()
+							fire:Activate()
+							fire.ParentEntity=v
+						end
+					end
+				end
+			end
+		end
+		
+		if self.IgnitionTime>math.random(1,5) then
+			self.ParentEntity.EntFired=nil
+			self:Remove()
+		end
+	end
+end
+
+
+function ENT:LoadModel()
+     if self.UseRandomModels then
+	     self:SetModel(table.Random(Models))
+	 else
+	     self:SetModel(self.Model)
+	 end
+end
+	 
+
+
+
+
+
+

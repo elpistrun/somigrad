@@ -1,0 +1,460 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hinit/weapon_hands/tier_0_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:117
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad/lua/hinit/weapon_hands/tier_0_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad\\lua\\hinit\\weapon_hands\\tier_0_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local SWEP = oop.Reg("weapon_hands","base_weapon",true)
+if not SWEP then return INCLUDE_BREAK end
+
+if SERVER then
+	SWEP.Weight = 5
+	SWEP.AutoSwitchTo = false
+	SWEP.AutoSwitchFrom = false
+else
+	SWEP.PrintName = L("weapon_hands")
+	SWEP.Slot = 0
+	SWEP.SlotPos = -100
+	SWEP.DrawAmmo = false
+	SWEP.DrawCrosshair = false
+	SWEP.BounceWeaponIcon = false
+	SWEP.WepSelectIcon = surface.GetTextureID( "vgui/wep_jack_hmcd_hands" )
+
+	local HandTex, ClosedTex = surface.GetTextureID("vgui/hud/gmod_hand"), surface.GetTextureID("vgui/hud/gmod_closedhand")
+
+	function SWEP:DrawWeaponSelection( x, y, wide, tall, alpha )
+	-- Set us up the texture
+		surface.SetDrawColor( 255, 255, 255, alpha )
+		surface.SetMaterial(Material("homigrad/weapon_icon/hand.png") )
+
+		-- Lets get a sin wave to make it bounce
+		local fsin = 0
+
+
+		-- Draw that mother
+		local size = math.min(wide,tall)
+		size = size - tall * 0.05
+		
+		surface.DrawTexturedRect(x + wide/2-size/2,y,size,size)
+
+		-- Draw weapon info box
+		self:PrintWeaponInfo( x + wide + 20, y + tall * 0.95, alpha )
+	end
+
+	local white = Color(255,255,255)
+
+	function SWEP:DrawHUD()
+		if not (GetViewEntity() == LocalPlayer()) then return end
+		if LocalPlayer():InVehicle() then return end
+
+		local ply = self.Owner
+
+		local Tr = ply:EyeTraceShoot(PlayerDisUse)
+		if not Tr then return end
+
+		local fraction = Tr.Fraction * 80000
+
+		local pos = Tr.HitPos:ToScreen()
+		local ent = Tr.Entity
+
+		local Size = math.max(1 - fraction,0.25)
+
+		if Tr.Hit then
+			if not self.Owner:KeyDown(IN_ATTACK2) and IsValid(ent) and ent.HUDTarget then return end
+
+			surface.SetDrawColor(255,255,255,255 * Size)
+			
+			local s = 64 * Size
+
+			if self:CanPickup(ent) then
+				s = 128 * Size
+				
+				if self.Owner:KeyDown(IN_ATTACK2) then
+					surface.SetTexture(ClosedTex)
+				else
+					surface.SetTexture(HandTex)
+				end
+
+				surface.DrawTexturedRect(pos.x - s / 2,pos.y - s / 2,s,s)
+			else
+				draw.RoundedBox(s,pos.x - s / 2,pos.y - s / 2,s,s,white)
+			end
+			
+			if IsValid(ent) then
+				if ent:GetNoDraw() then return end
+
+				local col
+
+				if ent.GetPlayerColor then
+					col = ent:GetPlayerColor():ToColor()
+				else
+					col = ent:GetColor()
+				end
+
+				col.a = 255 * Size * 2 * (1 - InvOpenK)
+
+				draw.DrawText(ent:IsPlayer() and ent:Name() or ent:GetNWString("Nickname") or "","H.45",pos.x,pos.y - 30,col,TEXT_ALIGN_CENTER)
+			end
+		end
+	end
+end
+
+SWEP.SwayScale = 3
+SWEP.BobScale = 3
+SWEP.InstantPickup = true -- FF compat
+SWEP.Author = ""
+SWEP.Contact = ""
+SWEP.Purpose = ""
+SWEP.Instructions = L("weapon_hands_desc")
+
+SWEP.Spawnable = true
+SWEP.AdminOnly = false
+
+SWEP.HoldType = "normal"
+
+SWEP.ViewModel = ""
+SWEP.WorldModel = ""
+
+SWEP.UseHands = true
+SWEP.AttackSlowDown = .5
+SWEP.Primary.ClipSize = -1
+SWEP.Primary.DefaultClip = -1
+SWEP.Primary.Automatic = true
+SWEP.Primary.Ammo = "none"
+SWEP.Secondary.ClipSize = -1
+SWEP.Secondary.DefaultClip = -1
+SWEP.Secondary.Automatic = false
+SWEP.Secondary.Ammo = "none"
+SWEP.ReachDistance = 125
+SWEP.HomicideSWEP = true
+
+function SWEP:SetupDataTables()
+	self:NetworkVar("Float", 0, "NextIdle")
+	self:NetworkVar("Bool", 2, "Fists")
+	self:NetworkVar("Float", 1, "NextDown")
+	self:NetworkVar("Bool", 3, "Blocking")
+	self:NetworkVar("Bool", 4, "IsCarrying")
+end
+
+function SWEP:Initialize()
+	self:SetNextIdle(CurTime() + 5)
+	self:SetNextDown(CurTime() + 5)
+	self:SetHoldType(self.HoldType)
+	self:SetFists(false)
+	self:SetBlocking(false)
+
+	self:DrawShadow(false)
+end
+
+function SWEP:Deploy()
+	if not IsFirstTimePredicted() then
+		return
+	end
+
+	self:SetNextPrimaryFire(CurTime() + .5)
+	self:SetFists(false)
+	self:SetNextDown(CurTime())
+
+	return true
+end
+
+function SWEP:Holster() return true end
+function SWEP:CanPrimaryAttack() return true end
+
+local pickupWhiteList = {
+	["prop_ragdoll"] = true,
+	["prop_physics"] = true,
+	["prop_physics_multiplayer"] = true
+}
+
+function SWEP:CanPickup(ent)
+	if not IsValid(ent) then return end
+
+	if ent:IsNPC() then return false end
+	if ent:IsPlayer() then return false end
+	if ent:IsWorld() then return false end
+
+	local class = ent:GetClass()
+
+	local phys = ent:GetPhysicsObject()
+
+	if pickupWhiteList[class] then return true end
+	if IsValid(phys) and phys:IsMotionEnabled() then return true end
+
+	return false
+end
+
+function SWEP:CanCarryEnt(ent)
+	if  IsValid(ent) and self:CanPickup(ent) and not ent:IsPlayer() then
+		return true
+	end
+
+	return false
+end
+
+function SWEP:SecondaryAttack()
+	if not IsFirstTimePredicted() then return end
+	if self:GetFists() then return end
+
+	if SERVER then
+		if IsValid(self.CarryEnt) then return end
+
+		local ply = self.Owner
+		local tr = ply:EyeTrace(PlayerDisUse)
+
+		if not tr then return end
+		
+		local ent = tr.Entity
+
+		if self:CanCarryEnt(ent) then
+			local Dist = (tr.StartPos - tr.HitPos):Length()
+
+			if Dist < self.ReachDistance then
+				sound.Play("Flesh.ImpactSoft", self.Owner:GetShootPos(), 65, math.random(90, 110))
+
+				self:SetCarrying(ent,tr.PhysicsBone,tr.HitPos,Dist)
+
+				tr.Entity.Touched = true
+
+				self:ApplyForce()
+			end
+		elseif IsValid(ent) and ent:IsPlayer() then
+			local Dist = (self.Owner:GetShootPos() - tr.HitPos):Length()
+
+			if Dist < self.ReachDistance then
+				sound.Play("Flesh.ImpactSoft", self.Owner:GetShootPos(), 65, math.random(90, 110))
+				self.Owner:SetVelocity(self.Owner:GetAimVector() * 20)
+				ent:SetVelocity(-self.Owner:GetAimVector() * 50)
+				self:SetNextSecondaryFire(CurTime() + .25)
+			end
+		end
+	end
+end
+
+function SWEP:FreezeMovement()
+	/*if self.Owner:KeyDown(IN_USE) and self.Owner:KeyDown(IN_ATTACK2) and self:GetNWBool( "Pickup" ) then
+		return true
+	end
+
+	return false*/
+end
+
+if SERVER then
+	util.AddNetworkString("get pulse")
+else
+	net.Receive("get pulse",function()
+		chat.AddText(L("pulse_" .. net.ReadString()))
+	end)
+end
+
+function SWEP:OnRemove()
+
+end
+
+function SWEP:GetCarrying()
+	return self.CarryEnt
+end
+
+function SWEP:SetCarrying(ent, bone, pos, dist)
+	if IsValid(ent) then
+		self:SetNWBool( "Pickup", true )
+		self.CarryEnt = ent
+		self.CarryBone = bone
+		self.CarryDist = dist
+
+		if not (ent:GetClass() == "prop_ragdoll") then
+			self.CarryPos = ent:WorldToLocal(pos)
+		else
+			self.CarryPos = nil
+		end
+	else
+		self:SetNWBool( "Pickup", false )
+		self.CarryEnt = nil
+		self.CarryBone = nil
+		self.CarryPos = nil
+		self.CarryDist = nil
+	end
+end
+
+function SWEP:Think()
+	local owner = self:GetOwner()
+
+	local fists = self:GetFists()
+
+	if owner:KeyDown(IN_ATTACK2) and not fists then
+		if IsValid(self.CarryEnt) then self:ApplyForce() end
+	elseif self.CarryEnt then
+		self:SetCarrying()
+	end
+
+	if fists and owner:KeyDown(IN_ATTACK2) then
+		self:SetNextPrimaryFire(CurTime() + .5)
+		self:SetBlocking(true)
+	else
+		self:SetBlocking(false)
+	end
+
+	local HoldType = "fist"
+
+	if fists then
+		HoldType = "fist"
+		local Time = CurTime()
+
+		if self:GetBlocking() then
+			self:SetNextDown(Time + 1)
+			HoldType = "camera"
+		end
+
+		if (self:GetNextDown() < Time) or owner:KeyDown(IN_SPEED) then
+			self:SetNextDown(Time + 1)
+			self:SetFists(false)
+			self:SetBlocking(false)
+		end
+	else
+		HoldType = "normal"
+	end
+
+	if IsValid(self.CarryEnt) or self.CarryEnt then
+		HoldType = "magic"
+	end
+
+	if self.Owner:KeyDown(IN_SPEED) then
+		HoldType = "normal"
+	end
+
+	if SERVER then
+		self:SetHoldType(HoldType)
+	end
+end
+
+function SWEP:PrimaryAttack()
+	local owner = self:GetOwner()
+
+	local side = "fists_left"
+
+	if math.random(1, 2) == 1 then
+		side = "fists_right"
+	end
+
+	if owner:KeyDown(IN_ATTACK2) then return end
+	
+	self:SetNextDown(CurTime() + 7)
+
+	if not self:GetFists() then
+		self:SetFists(true)
+		self:SetNextPrimaryFire(CurTime() + 0.35)
+
+		return
+	end
+
+	if self:GetBlocking() then return end
+	if owner:KeyDown(IN_SPEED) then return end
+
+	if not IsFirstTimePredicted() then return end
+
+	owner:ViewPunch(Angle(0,0,math.random(-2,2)))
+	owner:SetAnimation(PLAYER_ATTACK1)
+
+	if SERVER then
+		sound.Emit(self:EntIndex(),"weapons/slam/throw.wav",65,math.random(90,110))
+		owner:ViewPunch(Angle(0,0,math.random(-2,2)))
+
+		timer.Simple(0.075,function()
+			if IsValid(self) then self:AttackFront() end
+		end)
+	end
+
+	self:SetNextPrimaryFire(CurTime() + 0.35)
+	self:SetNextSecondaryFire(CurTime() + 0.35)
+end
+
+function SWEP:AttackFront()
+	if CLIENT then return end
+
+	local owner = self:GetOwner()
+
+	local tr = owner:EyeTrace(PlayerDisUse)
+	if not tr then return end
+
+	local ent,hitPos = tr.Entity,tr.HitPos
+
+	local dir = tr.Normal
+
+	if IsValid(ent) or (ent and ent.IsWorld and ent:IsWorld()) then
+		local SelfForce, Mul = -150, 1
+		
+		if self:IsEntSoft(ent) then
+			SelfForce = 25
+
+			if ent:IsPlayer() and IsValid(ent:GetActiveWeapon()) and ent:GetActiveWeapon().GetBlocking and ent:GetActiveWeapon():GetBlocking() and not RagdollOwner(ent) then
+				sound.Play("Flesh.ImpactSoft", hitPos, 65, math.random(90, 110))
+			else
+				sound.Play("Flesh.ImpactHard", hitPos, 65, math.random(90, 110))
+			end
+		else
+			sound.Play("Flesh.ImpactSoft", hitPos, 65, math.random(90, 110))
+		end
+
+		local dmgTab = CreateDamageTab(ent,owner,self,5,DMG_CLUB)
+		dmgTab.isFists = true
+		dmgTab.force = dir * 5
+		dmgTab.pos = hitPos
+
+		ent:TakeDamageTab(dmgTab)
+
+		local phys = ent:GetPhysicsObject()
+
+		if IsValid(phys) then
+			if ent:IsPlayer() then ent:SetVelocity(dir * 150) end
+
+			phys:ApplyForceOffset(dir * 5000,hitPos)
+			//owner:SetVelocity(-AimVec * SelfForce * .8)
+		end
+
+		/*if ent:GetClass() == "func_breakable_surf" then
+			if math.random(1,20) == 10 then ent:Fire("break","",0) end
+		end
+
+		if ent:GetClass() == "func_breakable" then
+			if math.random(7,11) == 10 then ent:Fire("break","",0) end
+		end*/
+	end
+end
+
+--self.CarryDist
+--self.CarryPos
+--self.CarryBone
+
+function SWEP:Reload()
+	if not IsFirstTimePredicted() then return end
+
+	self:SetFists(false)
+	self:SetBlocking(false)
+end
+
+function SWEP:DrawWorldModel() end
+
+function SWEP:IsEntSoft(ent)
+	return ent:IsNPC() or ent:IsPlayer() or RagdollOwner(ent)
+end
+

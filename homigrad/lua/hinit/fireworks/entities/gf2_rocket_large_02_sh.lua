@@ -1,0 +1,157 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hinit/fireworks/entities/gf2_rocket_large_02_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad\\lua\\hinit\\fireworks\\entities\\gf2_rocket_large_02_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ENT = oop.Reg("gf2_rocket_large_02","gf2_base_rocket")
+if not ENT then return end
+
+ENT.Spawnable		            	 =  true         
+ENT.AdminSpawnable		             =  false 
+
+ENT.PrintName		                 =  "Cosmic Blast: Lrg Rocket"
+ENT.Author			                 =  "Rogue"
+ENT.Contact			                 =  "baldursgate3@gmail.com"
+ENT.Category                         =  "G-Works 2 - Large Rockets"
+    
+ENT.Model                            =  "models/models/gf2/rogue_cheney/rockets/big/rocket_01.mdl"
+ENT.RocketTrail                      =  "gf2_firework_trail_main"
+ENT.RocketBurnoutTrail               =  "firework_burnout"
+ENT.Effect                           =  "gf2_rocket_large_explosion_02"
+
+ENT.ExplosionSound                   =  "garrys_fireworks_2/fireworks/explosions/fw_large_pellet_explosion.wav"         
+ENT.StartSound                       =  "garrys_fireworks_2/fireworks/launch/rocket_launch_01.wav"                        
+ENT.ArmSound                         =  "npc/roller/mine/rmine_blip3.wav"            
+ENT.ActivationSound                  =  "buttons/button14.wav"  
+ENT.EngineSound                      =  "gf2_firework_engineloop"  
+ENT.SmartLaunch                      =  false
+ENT.Timed                            =  false 
+
+ENT.ExplosionRadius                  =  800                                  
+ENT.MaxIgnitionTime                  =  0           
+ENT.Life                             =  20            
+ENT.MaxDelay                         =  0           
+ENT.TraceLength                      =  100             
+ENT.Mass                             =  100
+ENT.EnginePower                      =  50
+ENT.FuelBurnoutTime                  =  1   
+ENT.IgnitionDelay                    =  0           
+ENT.ArmDelay                         =  0.1                      
+ENT.ForceOrientation                 =  "UP"
+ENT.Timer                            =  0
+ENT.ExplodeDelay                     =  4
+ENT.GBOWNER                          =  nil
+ENT.SkinNumber                       =  1
+
+
+function ENT:SpawnFunction( ply, tr )
+	if ( !tr.Hit ) then return end
+		self.GBOWNER = ply
+		local ent = ents.Create( self.ClassName )
+		ent:SetPhysicsAttacker(ply)
+		ent:SetPos( tr.HitPos + tr.HitNormal * 16 ) 
+		ent:Spawn()
+		ent:Activate()
+		
+	return ent
+end
+
+function ENT:Explode()
+	if not self.Exploded then return end
+	local pos = self:LocalToWorld(self:OBBCenter())
+	self:Explode_Sound()
+	self:Explode_Shockwave()
+	ParticleEffect(self.Effect,self:GetPos(),Angle(0,0,0),nil)
+	self:EightBlasts()
+	self:Remove()
+end
+
+function ENT:EightBlasts()
+	local effect = "gf2_rocket_large_explosion_02_circular_packet_main"
+	for i=1,16 do
+		local radians = ((360/16)*i)*(180/math.pi)
+		
+		local x = math.cos(radians) + 0
+		local y = math.sin(radians) + 0
+		local z = math.sin(radians) + 0
+
+		local ent = ents.Create("prop_physics")
+		ent:SetModel("models/props_junk/PopCan01a.mdl")
+		ent:SetPos( self:GetPos() + (Vector(x,0,z)*2500))
+		ent:Spawn()
+		ent:Activate()
+		ent:SetMoveType( MOVETYPE_NONE )
+		ent:SetNoDraw(true)
+		
+		timer.Simple(5+4/i, function()
+			if !ent:IsValid() then return end
+			ParticleEffect(effect,ent:GetPos(),Angle(0,0,0),nil)
+			
+			if i==16 then ExplodeSPos(ent:GetPos(),"garrys_fireworks_2/fireworks/explosions/multiple_crackles.mp3" ) end
+		end)
+		
+	end
+
+
+end
+
+function ENT:Launch()
+	if(self.Exploded) then return end
+	if(self.Burned) then return end
+	if(self.Fired) then return end
+
+	local phys = self:GetPhysicsObject()
+	if !phys:IsValid() then return end
+
+	self.Fired = true
+	if(self.SmartLaunch) then
+		constraint.RemoveAll(self)
+	end
+	timer.Simple(self.ExplodeDelay, function()
+		if !self:IsValid() then return end
+		self.Exploded=true
+		self:Explode()
+	end)
+	timer.Simple(0.01,function()
+		if not self:IsValid() then return end
+		if(phys:IsValid()) then
+			phys:Wake()
+			phys:EnableMotion(true)
+			self.Ignition = true
+			self:EmitSound(self.StartSound, 100, 100)
+			ParticleEffectAttach(self.RocketTrail,PATTACH_ABSORIGIN_FOLLOW,self,1)
+			timer.Simple(0.4, function()
+				if !self:IsValid() then return end
+				self:EmitSound(self.EngineSound, 100, 100)
+			end)
+			timer.Simple(1, function()
+				if !self:IsValid() then return end
+				self.Armed    = true	
+			end)
+		end
+	end) 
+	timer.Simple(self.FuelBurnoutTime, function()
+		if !self:IsValid() then return end
+		self.Burnt=true
+		self:StopParticles()
+		self:StopSound(self.EngineSound)
+		ParticleEffectAttach("gf2_firework_idle_golden_trail",PATTACH_ABSORIGIN_FOLLOW,self,1)
+	end)
+end

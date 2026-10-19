@@ -1,0 +1,88 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgamemode/roundsystem/levels/_special/jailbreak/init_tier_0_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:8 <
+]]
+
+-- "addons\\homigrad\\lua\\hgamemode\\roundsystem\\levels\\_special\\jailbreak\\init_tier_0_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local Level = oop.Reg("level_jailbreak","level_base",true)
+if not Level then return INCLUDE_BREAK end
+
+AdminPanelSuccessReg("jailbreak_moderate",nil,"rights")
+
+AdminPanel_Command_Registry("jailbreak_add",{"string","number"},nil,nil,"jailbreak"):SetDontShowGUI(true)
+AdminPanel_Command_Registry("jailbreak_ranks",{},nil,nil,"jailbreak"):SetDontShowGUI(true)
+
+Level.CantRandom = true
+function Level:CanRandomNext() return false end
+Level:SetEndType("team")
+
+Level.ShouldReplaceCSSWeapons = false
+
+Level.blue = {"jailbreak_blue",Color(55,55,255),
+    weapons = {
+        "weapon_event_speaker",
+        "med_kit","med_kit","med_kit",
+        "weapon_physgun","gmod_tool"
+    },
+    main_weapon = {
+        "weapon_ak47",
+    },
+    secondary_weapon = {
+    },
+    models = Level.StandardPlayerModels
+}
+
+Level.red = {"jailbreak_red",Color(255,55,55),
+    models = Level.StandardPlayerModels
+}
+
+Level.teamEncoder = {
+    [1] = "blue",
+    [2] = "red"
+}
+
+function Level:GetMaxBlue()
+    return math.max(math.ceil(#player.GetAll() / 8),1)
+end
+
+function Level:CanUseSpawnMenu(ply)
+    if ply:Team() == 1 and ply:Alive() then
+        local rank,rankID = self:GetRank(ply)
+
+        return rankID == true or rankID >= 3
+    end
+end
+
+function Level:CantUseFootkick() return false end
+
+function Level:TeamTab_Team(id,team)
+    if id ~= 1 then return end
+
+    local rank = self:GetRank(LocalPlayer())
+    local col = rank[2]
+
+    for i,armor in pairs(rank.armors or empty) do
+        local armor,col = self.GetArmor(armor,col)
+
+        team.armors[#team.armors + 1] = {Armor_GetValidName(armor),col}
+    end
+end
+
+function Level:DrawScreenspace() return false end

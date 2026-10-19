@@ -1,0 +1,31 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad_core/lua/shlib/tier_1/oop/vgui/content/colormixer_cl.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:115
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad_core/lua/shlib/tier_1/oop/vgui/content/colormixer_cl.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/shlib.lua:5 <
+]]
+
+-- "addons\\homigrad_core\\lua\\shlib\\tier_1\\oop\\vgui\\content\\colormixer_cl.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local PANEL = oop.Reg("v_colormixer","v_panel")
+if not PANEL then return end
+
+PANEL.Base = "DColorMixer"

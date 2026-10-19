@@ -1,0 +1,19 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/wac/lua/entities/wac_pl_base/shared.lua <
+    > Callstack: addons/wac/lua/entities/wac_pl_base/cl_init.lua:2 <
+]]
+
+
+ENT.Base = "wac_hc_base"
+ENT.Type = "anim"
+
+ENT.Spawnable = false
+ENT.AdminSpawnable = false
+
+

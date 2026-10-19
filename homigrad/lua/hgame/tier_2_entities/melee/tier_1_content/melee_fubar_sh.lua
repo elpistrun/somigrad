@@ -1,0 +1,160 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgame/tier_2_entities/melee/tier_1_content/melee_fubar_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:4 <
+]]
+
+-- "addons\\homigrad\\lua\\hgame\\tier_2_entities\\melee\\tier_1_content\\melee_fubar_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local SWEP = oop.Reg("melee_fubar","melee_metalbat")
+if not SWEP then return end
+
+SWEP.PrintName = "One Shoot Kill"
+
+SWEP.WorldModel = "models/props_junk/PopCan01a.mdl"
+
+SWEP.Primary.Damage = 300
+SWEP.Primary.Ammo = "none"
+SWEP.Primary.DefaultClip = -1
+SWEP.Primary.Automatic = false
+SWEP.Primary.Recoil = 0.5
+SWEP.Primary.Delay = 2
+SWEP.Primary.Force = 100
+
+SWEP.DrawSound = "weapons/melee/holster_in_light.wav"
+SWEP.HitSound = "physics/metal/metal_sheet_impact_hard2.wav"
+SWEP.FlashHitSound = "weapons/melee/flesh_impact_blunt_03.wav"
+SWEP.ShouldDecal = false
+SWEP.HoldType = "melee2"
+SWEP.DamageType = DMG_CLUB
+
+SWEP.sndTwroh = {"weapons/melee/swing_heavy_blunt_01.wav","weapons/melee/swing_heavy_blunt_02.wav","weapons/melee/swing_heavy_blunt_03.wav"}
+
+SWEP.dwsItemPos = Vector(0.5,5,0)
+SWEP.dwsItemAng = Angle(90 + 45,0,90)
+SWEP.dwsItemFOV = 2
+
+SWEP.SubStamina = 0
+
+SWEP.DeployTime = 0
+
+SWEP.FirstView = true
+
+SWEP.MissSound 				= Sound("weapons/knife/knife_slash1.wav")
+SWEP.WallSound 				= Sound("weapons/knife/knife_hitwall1.wav")
+SWEP.FleshHit1 				= ("weapons/knife/knife_hit1.wav")
+SWEP.FleshHit2 				= ("weapons/knife/knife_hit2.wav")
+SWEP.FleshHit3 				= ("weapons/knife/knife_hit3.wav")
+SWEP.FleshHit4 				= ("weapons/knife/knife_hit4.wav")
+SWEP.SuperFleshHitSound		= Sound("weapons/knife/knife_stab.wav")
+
+function SWEP:GetEyeTrace()
+	local ply = self:GetOwner()
+	
+	local pos,ang = ply:Eye()
+
+	local tr = {
+        start = ply:EyePos(),
+        endpos = ply:EyePos() + Vector(PlayerDisUse * 2,0,0):Rotate(ply:EyeAngles()),
+        filter = ply
+    }
+
+	return util.TraceLine(tr)
+end
+
+function SWEP:PrimaryAttack()
+    if not self:GetNWBool("Mode") or not self:CanPrimaryAttack() then return end
+
+    self.nextAttack = CurTime() + self.Primary.Delay
+
+	local bullet = {}
+	bullet.Distance = PlayerDisUse * 2
+	bullet.Force = 5
+	bullet.HullSize = 7
+	bullet.Num = 1
+	bullet.Tracer = 0
+	bullet.Dir = self.Owner:GetAimVector()
+	bullet.Src = self.Owner:GetShootPos()
+	bullet.Attacker = self.Owner
+	bullet.Damage = self.Primary.Damage
+
+	function bullet.Callback( ply, trace, dmginfo )
+		if SERVER then
+			if trace.Entity then
+				if trace.Entity:IsPlayer() then
+					sound.Play( self[ "FleshHit"..tostring( math.random(1,4) ) ], trace.HitPos, 75, 100, 1 )
+
+                    blood_HeadExplode(trace.HitPos,-trace.Normal)
+				else
+					sound.Play( self.WallSound, trace.HitPos, 75, 100, 1)
+				end
+			end
+		end
+	end
+
+    self:GetOwner():LagCompensation(true)
+	self.Weapon:FireBullets( bullet )
+    self:GetOwner():LagCompensation(false)
+
+	-- break shit???
+	local tr = self.Owner:GetEyeTrace()
+	if tr.HitPos:Distance( self.Owner:GetShootPos() ) < 75 then
+		if tr.Entity then
+			if SERVER then
+				local keyvalues = tr.Entity:GetKeyValues()
+				if keyvalues.classname == "func_breakable" then
+					--tr.Entity:Input("RemoveHealth", self.Owner, self.Weapon, self.Primary.Damage)
+				end
+			end
+		end
+	else
+		if SERVER then
+			self.Owner:EmitSound(self.MissSound, 100, 100, 1)
+		end
+	end
+
+	self.Weapon:SetNextPrimaryFire( CurTime() + 0.5 )
+	self.Weapon:SetNextSecondaryFire( CurTime() + 0.5 )
+
+	self.Owner:SetAnimation( PLAYER_ATTACK1 );
+	self.Weapon:SendWeaponAnim( ACT_VM_PRIMARYATTACK )
+	
+	self.Owner:SetAnimation( PLAYER_ATTACK1 ) --3rd Person Animation
+	self.Weapon:SendWeaponAnim(ACT_VM_PRIMARYATTACK)
+end
+
+function SWEP:PreDrawViewModel() return not self:GetNWBool("Mode") end
+function SWEP:DrawWorldModel()
+    if not self:GetNWBool("Mode") then return end
+
+    self:DrawModel()
+end
+
+if SERVER then
+    function SWEP:Reload()
+        if (self.delayReload or 0) > CurTime() then return end
+        self.delayReload = CurTime() + 0.25
+        
+        self:SetNWBool("Mode",not self:GetNWBool("Mode"))
+    end
+else
+    event.Add("PlayerDraw","ONe Shoot",function(ply)
+        local wep = ply.GetActiveWeapon and ply:GetActiveWeapon()
+        if not IsValid(wep) or wep:GetClass() != "melee_fubar" or wep:GetNWBool("Mode") then return end
+
+        return false
+    end,-40)
+end

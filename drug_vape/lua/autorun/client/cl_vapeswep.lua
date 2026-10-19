@@ -1,0 +1,263 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/drug_vape/lua/autorun/client/cl_vapeswep.lua <
+    > Callstack:  <
+]]
+
+-- "addons\\drug_vape\\lua\\autorun\\client\\cl_vapeswep.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+-- autorun/client/cl_vapeswep.lua
+-- Defines clientside globals for Vape SWEP
+
+-- Vape SWEP by Swamp Onions - http://steamcommunity.com/id/swamponions/
+
+if not VapeParticleEmitter then VapeParticleEmitter = ParticleEmitter(Vector(0,0,0)) end
+
+sound.Add({
+	name = "vape_inhale",
+	channel = CHAN_WEAPON,
+	volume = 0.24,
+	level = 60,
+	pitch = { 95 },
+	sound = "vapeinhale.wav"
+})
+
+net.Receive("Vape",function()
+	local ply = net.ReadEntity()
+	local amt = net.ReadInt(8)
+	local fx = net.ReadInt(8)
+	if !IsValid(ply) then return end
+
+	if amt>=50 then
+		ply:EmitSound("vapecough1.wav",90)
+
+		for i=1,200 do
+			local d=i+10
+			if i>140 then d=d+150 end
+			timer.Simple((d-1)*0.003,function() vape_do_pulse(ply, 1, 100, fx) end)
+		end
+
+		return
+	elseif amt>=35 then
+		ply:EmitSound("vapebreath2.wav",75,100,0.7)
+	elseif amt>=10 then
+		ply:EmitSound("vapebreath1.wav",70,130-math.min(100,amt*2),0.4+(amt*0.005))
+	end
+
+	for i=1,amt*2 do
+		timer.Simple((i-1)*0.02,function() vape_do_pulse(ply,math.floor(((amt*2)-i)/10), fx==2 and 100 or 0, fx) end)
+	end
+end)
+
+net.Receive("VapeArm",function()
+	local ply = net.ReadEntity()
+	local z = net.ReadBool()
+	if !IsValid(ply) then return end
+	if ply.vapeArm != z then
+		if z then
+			timer.Simple(0.3, function() 
+				if !IsValid(ply) then return end 
+				if ply.vapeArm then ply:EmitSound("vape_inhale") end
+			end)
+		else
+			ply:StopSound("vape_inhale")
+		end
+		ply.vapeArm = z
+		ply.vapeArmTime = RealTime()
+		local m = 0
+		if z then m = 1 end
+	end
+end)
+
+net.Receive("VapeTalking",function()
+	local ply = net.ReadEntity()
+	if IsValid(ply) then ply.vapeTalkingEndtime = net.ReadFloat() end
+end)
+
+event.Add("Bones","Vape",function(ply)
+	if not ply.vapeArm then return end
+
+	local k = 1 - math.max(ply.vapeArmTime - RealTime() + 0.1,0) / 0.1
+
+	ply:AddBoneAng("rupperarm",Angle(20,-70,10):Mul(k))
+	ply:AddBoneAng("rforearm",Angle(-15,15,0):Mul(k))
+end)
+
+function vape_do_pulse(ply, amt, spreadadd, fx)
+	if !IsValid(ply) then return end
+
+	if ply:WaterLevel()==3 then return end
+
+	if not spreadadd then spreadadd=0 end
+
+	local attachid = ply:LookupAttachment("eyes")
+	VapeParticleEmitter:SetPos(LocalPlayer():GetPos())
+	
+	local angpos = ply:GetAttachment(attachid) or {Ang=Angle(0,0,0), Pos=Vector(0,0,0)}
+	local fwd
+	local pos
+	
+	if (ply != LocalPlayer()) then
+		fwd = (angpos.Ang:Forward()-angpos.Ang:Up()):GetNormalized()
+		pos = angpos.Pos + (fwd*3.5)
+	else
+		fwd = ply:GetAimVector():GetNormalized()
+		pos = ply:GetShootPos() + fwd*1.5 + gui.ScreenToVector( ScrW()/2, ScrH() )*5
+	end
+
+	pos = ply:Eye()
+
+	pos:Add(Vector(3,0,-3):Rotate(ply:EyeAngles()))
+
+	fwd = ply:GetAimVector():GetNormalized()
+
+	for i = 1,amt do
+		if !IsValid(ply) then return end
+		local particle
+		if fx == 6 then
+			particle = VapeParticleEmitter:Add(string.format("effects/fire_cloud1"), pos)
+			if ply==LocalPlayer() then table.insert(MyDragonVapeParticles, particle) end
+		else
+			particle = VapeParticleEmitter:Add(string.format("particle/smokesprites_00%02d",math.random(7,16)), pos)
+		end
+		if particle then
+			local dir = VectorRand():GetNormalized() * ((amt+5)/10)
+			vape_do_particle(particle, (ply:GetVelocity()*0.25)+(((fwd*9)+dir):GetNormalized() * math.Rand(50,80) * (amt + 1) * 0.2), fx)
+		end
+	end
+end
+
+function vape_do_particle(particle, vel, fx)
+	particle:SetColor(255,255,255,255)
+	if fx == 3 then particle:SetColor(220,255,230,255) end
+	if fx == 4 then particle:SetColor(220,230,255,255) end
+	if fx == 7 then particle:SetColor(vape_red_white_blue_chooser(math.random(0,2)/3)) end
+	if fx >= 20 then 
+		local c = JuicyVapeJuices[fx-19].color
+		if c == nil then c = HSVToColor(math.random(0,359),1,1) end
+		particle:SetColor(c.r, c.g, c.b, 255)
+	end
+
+	local mega = 1
+	if fx == 2 then mega = 4 end
+	
+	particle:SetVelocity( vel * mega * (fx==6 and 2 or 1))
+	particle:SetGravity( Vector(0,0,fx == 4 and 15 or 1.5) )
+	particle:SetLifeTime(0)
+	particle:SetDieTime(math.Rand(80,100)*0.11*mega)
+	if fx==6 then particle:SetDieTime(math.Rand(80,100)*0.03) end
+	particle:SetStartSize(2*mega)
+	if fx==6 then particle:SetStartSize(3) end
+	particle:SetEndSize(40*mega*mega)
+	if fx==6 then particle:SetEndSize(20) end
+	particle:SetStartAlpha(fx == 4 and 20 or 150)
+	particle:SetEndAlpha(0)
+	particle:SetCollide(true)
+	particle:SetBounce(0.25)
+	particle:SetRoll(math.Rand(0,360))
+	particle:SetRollDelta(0.01*math.Rand(-40,40))
+	particle:SetAirResistance(50)
+	if fx==6 then particle:SetAirResistance(20) end
+end
+
+MyDragonVapeParticles = {}
+
+timer.Create("DragonVapeCollisionDetection",0.2,0,function()
+	for k2,p in next,MyDragonVapeParticles do
+		if p:GetDieTime()-p:GetLifeTime() < 0.1 then table.remove(MyDragonVapeParticles, k2) end
+	end
+	if #MyDragonVapeParticles > 0 then
+		for k,v in next,ents.GetAll() do
+			if (v.nextDragonVapeTime or 0) < CurTime() and v:IsSolid() and v~=LocalPlayer() then
+				local pos = v:LocalToWorld(v:OBBCenter())
+				local rad = v:BoundingRadius() + 20
+				rad=rad*rad
+				for k2,p in next,MyDragonVapeParticles do
+					if (v.nextDragonVapeTime or 0) < CurTime() then
+						if pos:DistToSqr(p:GetPos()) < rad then
+							net.Start("DragonVapeIgnite")
+							net.WriteEntity(v)
+							net.SendToServer()
+							v.nextDragonVapeTime = CurTime() + 5
+						end
+					end
+				end
+			end
+		end
+	end
+end)
+
+function vape_red_white_blue_chooser(lerp)
+	lerp = 3*lerp
+
+	local v = nil
+
+	local r = Vector(255,0,0)
+	local w = Vector(255,255,255)
+	local b = Vector(0,0,255)
+
+	if lerp >= 2 then
+		v = LerpVector(lerp-2,b,r)
+	elseif lerp >= 1 then
+		v = LerpVector(lerp-1,w,b)
+	else
+		v = LerpVector(lerp,r,w)
+	end
+
+	--particle:SetColor takes seperate parameters per channel
+	return v.x,v.y,v.z,255
+end
+
+//как мне мматрицы не нравятся
+matproxy.Add({
+	name = "VapeTankColor",
+	init = function( self, mat, values )
+		self.ResultTo = values.resultvar
+	end,
+	bind = function( self, mat, ent )
+		if ( !IsValid( ent ) ) then return end
+		if ent:GetClass()=="viewmodel" then 
+			ent=ent:GetOwner()
+			if ( !IsValid( ent ) or !ent:IsPlayer() ) then return end
+			ent=ent:GetActiveWeapon()
+			if ( !IsValid( ent ) ) then return end
+		end
+		local v = ent.VapeTankColor or Vector(0.3,0.3,0.3)
+		if v==Vector(-1,-1,-1) then
+			local c = HSVToColor((CurTime()*60)%360,0.9,0.9)
+			v = Vector(c.r,c.g,c.b)/255.0
+		end
+		if v==Vector(-2,-2,-2) then
+			local c = Color(vape_red_white_blue_chooser((CurTime()*0.2)%1))
+			v = Vector(c.r,c.g,c.b)/255.0
+		end
+		mat:SetVector(self.ResultTo, v)
+	end
+})
+
+matproxy.Add({
+	name = "VapeAccentColor",
+	init = function( self, mat, values )
+		self.ResultTo = values.resultvar
+	end,
+	bind = function( self, mat, ent )
+		if ( !IsValid( ent ) ) then return end
+		local o = ent:GetOwner()
+		if ent:GetClass()=="viewmodel" then 
+			if (!IsValid(o)) or (!o:IsPlayer()) then return end
+			ent=o:GetActiveWeapon()
+			if ( !IsValid( ent ) ) then return end
+		end
+		local col = ent.VapeAccentColor or Vector(1,1,1)
+		if col==Vector(-1,-1,-1) then
+			col=Vector(1,1,1)
+			if IsValid(o) then col=o.CustomVapeColor or col end
+		end
+		mat:SetVector(self.ResultTo, col)
+	end
+})

@@ -1,0 +1,68 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hinit/nextbots/contents/touhou/npc_komeiji_fumo_friendly_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:115
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad/lua/hinit/nextbots/contents/touhou/npc_komeiji_fumo_friendly_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad\\lua\\hinit\\nextbots\\contents\\touhou\\npc_komeiji_fumo_friendly_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ENT = oop.Reg("npc_komeiji_fumo_friendly","npc_fumo")
+if not ENT then return end
+
+if SERVER then resource.AddWorkshop("2830488783") end
+
+ENT.PrintName = "komeiji friendly"
+ENT.IconOverride = "homigrad/scp/touhou/komeiji.png"
+
+ENT.JumpSound = Sound("npc_koishinextbot/jump.mp3")
+ENT.JumpHighSound = Sound("npc_koishinextbot/spring.mp3")
+
+ENT.AttackSounds = {
+	Sound("homigrad/vgui/training/bell_normal.wav")
+}
+
+ENT.TauntSounds = {
+	Sound("homigrad/scp/komeiji/enemy/fumo.wav")
+}
+
+ENT.Music = Sound("homigrad/scp/komeiji/friendly/hearttanger.wav")
+ENT.MusicVolume = 0.4
+
+ENT.SpriteMat = Material("homigrad/scp/touhou/komeiji.png","smooth mips")
+
+function ENT:AttackEnt(ent)
+	if event.Call("NextBot Can Attack",self,ent) == false then return end
+
+	if self.AttackSounds then
+		local name = table.Random(self.AttackSounds)
+		sound.Emit(self:EntIndex(),name,125,1,100,self:GetPos())
+	end
+
+	return true
+end
+
+ENT.ShowIfStateGoAway = true
+
+ENT:Event_Add("GoAway","DEV",function(self,ent)
+	sound.Emit(self:EntIndex(),"homigrad/vgui/training/pointscored.wav",125,1,100,self:GetPos())
+end)

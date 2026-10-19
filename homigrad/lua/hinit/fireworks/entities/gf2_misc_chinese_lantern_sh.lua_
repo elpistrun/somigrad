@@ -1,0 +1,263 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hinit/fireworks/entities/gf2_misc_chinese_lantern_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:115
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad/lua/hinit/fireworks/entities/gf2_misc_chinese_lantern_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad\\lua\\hinit\\fireworks\\entities\\gf2_misc_chinese_lantern_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ENT = oop.Reg("gf2_misc_chinese_lantern","gf2_base_adv")
+if not ENT then return end
+
+ENT.Spawnable		= true
+ENT.AdminOnly		= false
+
+ENT.PrintName		                 =  "Chinese Lantern"
+ENT.Author			                 =  "Rogue Cheney"
+ENT.Contact		                     =  "baldursgate3@gmail.com"
+ENT.Category                         =  "G-Works 2 - Misc"
+
+ENT.Model                            =  "models/models/gf2/rogue_cheney/misc/chinese_lantern.mdl"                      
+
+ENT.Mass                             =  50
+
+ENT.GBOWNER                          =  nil             
+
+	
+
+function ENT:SpawnFunction( ply, tr )
+     if ( !tr.Hit ) then return end
+	 self.GBOWNER = ply
+     local ent = ents.Create( self.ClassName )
+	 ent:SetPhysicsAttacker(ply)
+     ent:SetPos( tr.HitPos + tr.HitNormal * 16 ) 
+     ent:Spawn()
+     ent:Activate()
+
+     return ent
+end
+
+
+function ENT:Initialize()
+	if (SERVER) then
+		self:LoadModel()
+		self:PhysicsInit( SOLID_VPHYSICS )
+		self:SetSolid( SOLID_VPHYSICS )
+		self:SetMoveType( MOVETYPE_VPHYSICS )
+		self:SetUseType( ONOFF_USE ) 
+		local phys = self:GetPhysicsObject()
+		local skincount = self:SkinCount()
+		if (phys:IsValid()) then
+			phys:SetMass(self.Mass)
+			phys:Wake()
+		end
+		self:SetSkin(0)
+		
+		self.Balancer = {}
+		
+		
+		
+		self:SetPos(self:GetPos()+self:GetUp()*20)
+		
+		self:SetNWBool("CandleLit", false)
+		
+		self:SetUpBalancer()
+		
+		
+		
+		
+	end
+end
+
+
+function ENT:SetUpBalancer()
+	if self.Balancer[1]==nil then
+
+		local ent = ents.Create( "prop_physics" )
+		ent:SetModel( "models/hunter/blocks/cube025x025x025.mdl" )
+		ent:SetPos( self:GetPos() )
+		ent:Spawn()
+		ent:Activate()
+		ent:GetPhysicsObject():SetMass(50)
+		ent:SetCollisionGroup(COLLISION_GROUP_IN_VEHICLE)
+		ent:SetNoDraw(true)
+
+		table.insert(self.Balancer,ent)
+
+		
+		
+		constraint.Weld( self, ent, 0, 0, 0, true, false)
+		constraint.Keepupright( ent, Angle(0,0,0), 0, 200 )
+	end
+end
+
+function ENT:LimitBalancer()
+
+	for k, v in pairs(ents.FindInSphere(self:GetAttachment(self:LookupAttachment("candle_holder_attachment")).Pos,5)) do
+		if v:GetClass()=="prop_physics" then 
+			if (v:GetModel()=="models/hunter/blocks/cube025x025x025.mdl"==true) and v!=self.Balancer[1] then -- Preventing duped lanterns from glitching out
+				
+				v:Remove()
+			end
+			
+		end
+	end
+	
+
+
+
+	
+end
+
+if ( CLIENT ) then
+	function ENT:Draw()
+		self:DrawModel()
+		if !(WireAddon == nil) then Wire_Render(self.Entity) end
+	end
+end
+
+function ENT:TriggerInput(iname, value)
+     if (!self:IsValid()) then return end 
+end 
+function ENT:SearchCandles()
+	for k, v in pairs(ents.FindInSphere(self:GetPos(), 50)) do
+		if self.Candle==nil or self.Candle:IsValid()==false then
+			if v:GetClass()=="gf2_misc_chinese_candle" && v.Occupied!=true then
+				
+				v.Occupied=true
+				self.Candle = v 
+				
+				v:SetPos( self:GetAttachment( self:LookupAttachment("candle_holder_attachment") ).Pos + self:GetUp()*2 )
+				v:SetAngles(self:GetAngles())
+				v:SetParent( self, self:LookupAttachment("candle_holder_attachment") )
+			end
+		end
+	end
+end
+
+function ENT:Fly()
+	local phys = self:GetPhysicsObject()
+	if self.Candle!=nil then
+		if self.Candle:IsValid() then 
+			
+			if self.Candle.IsBurning==true && self.Candle.HasBurned==false then
+				self:SetNWBool("CandleLit", true)
+				phys:ApplyForceOffset(self:GetUp()*912, self:GetPos()+self:GetUp()*10)
+			else
+			
+				self:SetNWBool("CandleLit", false)
+			end
+		else
+			self:SetNWBool("CandleLit", false)
+		end
+	end
+	
+end
+
+function ENT:RestoreNoDraw()
+
+
+end
+
+function ENT:Think()
+	if (CLIENT) then
+		self:RenderFlares()
+
+	end
+	if (SERVER) then
+		if !self:IsValid() then return end
+		self:SearchCandles()
+		self:Fly()
+		self:RestoreNoDraw()
+		self:LimitBalancer()
+
+		
+		self:NextThink( CurTime()+0.01 )
+		return true
+	end
+end
+
+
+local  material, material2 = Material( "effects/yellowflare" ), Material( "effects/fas_glow_debris" )
+
+function ReturnLanterns() 
+	local positions = {}
+	for k, v in pairs(ents.GetAll()) do
+		if v:GetNWBool("CandleLit", false)==true then
+		table.insert(positions, v)
+		end
+	end
+	return positions
+end
+	
+function ENT:RenderFlares()
+	
+	hook.Add( "RenderScreenspaceEffects", "paintsprites", function()
+
+		for k, v in pairs(ReturnLanterns()) do
+	
+			
+			local sizedist = math.Clamp(LocalPlayer():GetPos():Distance(v:GetPos()), 0, 2000)
+			
+			local alphadist = math.Clamp((155/2000)*sizedist, 50, 255)+math.random(1,55)
+			local sizedratio = math.Clamp((200/2000)*sizedist, 85, 500) 
+
+			local alphadist2 = math.Clamp((255/2000)*sizedist, 0, 155)+math.random(1,5)
+			local sizedratio2 = math.Clamp((250/2000)*sizedist, 185, 1500) 
+			cam.Start3D( EyePos(), EyeAngles() ) -- Start the 3D function so we can draw onto the screen.
+				render.SetMaterial( material ) -- Tell render what material we want, in this case the flash from the gravgun
+				
+				render.DrawSprite( v:GetPos()+v:GetUp()*20, sizedratio, sizedratio,Color( 255, 125, 0, alphadist ) ) -- Draw the sprite in the middle of the map, at 16x16 in it's original colour with full alpha.
+
+			cam.End3D()
+			
+			cam.Start3D( EyePos(), EyeAngles() ) -- Start the 3D function so we can draw onto the screen.
+				render.SetMaterial( material2 ) -- Tell render what material we want, in this case the flash from the gravgun
+				
+				render.DrawSprite( v:GetPos()+v:GetUp()*20, sizedratio2, sizedratio2,Color( 255, 125, 0, alphadist2 ) ) -- Draw the sprite in the middle of the map, at 16x16 in it's original colour with full alpha.
+
+			cam.End3D()
+		end
+	end )
+
+end
+
+
+function ENT:Explode()
+     if !self.Exploded then return end
+	self:Remove()
+end
+
+function ENT:OnTakeDamage(dmginfo)
+     if self.Exploded then return end
+end
+
+function ENT:PhysicsCollide( data, physobj )
+end
+
+function ENT:Arm()
+end	 
+
+function ENT:Use( activator, caller )
+     
+end
+
+

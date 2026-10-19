@@ -1,0 +1,89 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad_donat/lua/hinit/donat/inventory/items/tier_1/bodygroup_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:115
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad_donat/lua/hinit/donat/inventory/items/tier_1/bodygroup_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad_donat\\lua\\hinit\\donat\\inventory\\items\\tier_1\\bodygroup_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ITEM = DonatItem_Reg("bodygroup","base")
+if not ITEM then return end
+
+ITEM.type = "2_accessories"
+
+local bodygroups = {
+    {
+        name = "Bodygroup 1",
+        desc = "donat_item_bodygroup1_desc",
+        raryType = "uncommon",
+        xp = 100
+    },
+    {
+        name = "Bodygroup 5",
+        desc = "donat_item_bodygroup2_desc",
+        raryType = "rary",
+        xp = 500
+    },
+    {
+        name = "Bodygroup 10",
+        desc = "donat_item_bodygroup3_desc",
+        raryType = "legendary",
+        xp = 1000
+    },
+    {
+        name = "Bodygroup 100",
+        desc = "donat_item_bodygroup4_desc",
+        raryType = "epic",
+        xp = 10000
+    }
+}
+
+function ITEM:GetInfo()
+    return bodygroups[self.data.typeItem or 1] or bodygroups[1]
+end
+
+function ITEM:GetDesc()
+    return self:GetInfo().desc
+end
+
+function ITEM:GetPrintName()
+    return self:GetInfo().name
+end
+
+function ITEM:GetRaryType()
+    return self:GetInfo().raryType
+end
+
+//
+
+function ITEM:DrawObject(w,h,panel,desc)
+    local mdl = self:GetCSMByID("models/combine_helicopter/helicopter_bomb01.mdl",desc)
+
+    self:OpenScene(w,h,panel,20)
+        mdl:SetAngles(Angle(-20,-45,-30))
+        mdl:SetPos(Vector(10,0,0))
+        mdl:DrawModel()
+    self:CloseScene(w,h,panel)
+end

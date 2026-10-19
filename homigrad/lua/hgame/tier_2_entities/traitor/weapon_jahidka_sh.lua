@@ -1,0 +1,147 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgame/tier_2_entities/traitor/weapon_jahidka_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:117
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad/lua/hgame/tier_2_entities/traitor/explosive_hidebomb_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:4 <
+]]
+
+-- "addons\\homigrad\\lua\\hgame\\tier_2_entities\\traitor\\weapon_jahidka_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local SWEP = oop.Reg("weapon_jahidka","base_weapon")
+if not SWEP then return end
+
+SWEP.PrintName 				= L("weapon_jahidka")
+SWEP.Author 				= "Homigrad"
+SWEP.Instructions			= L("weapon_jahidka_desc")
+SWEP.Category 				= L("weapon_category_traitor")
+
+SWEP.Spawnable 				= true
+SWEP.AdminOnly 				= false
+
+SWEP.Primary.ClipSize		= -1
+SWEP.Primary.DefaultClip	= -1
+SWEP.Primary.Automatic		= false
+SWEP.Primary.Ammo			= "none"
+
+SWEP.Secondary.ClipSize		= -1
+SWEP.Secondary.DefaultClip	= -1
+SWEP.Secondary.Automatic	= false
+SWEP.Secondary.Ammo			= "none"
+
+SWEP.Weight					= 5
+SWEP.AutoSwitchTo			= false
+SWEP.AutoSwitchFrom			= false
+
+SWEP.Slot					= 4
+SWEP.SlotPos				= 2
+SWEP.DrawAmmo				= true
+SWEP.DrawCrosshair			= false
+
+SWEP.WorldModel				= "models/props_junk/cardboard_box004a.mdl"
+
+SWEP.DrawWeaponSelection = DrawWeaponSelection
+SWEP.OverridePaintIcon = OverridePaintIcon
+
+SWEP.dwsItemPos = Vector(0,0,0)
+SWEP.dwsItemAng = Vector(0,0,90)
+SWEP.itemType = "none"
+SWEP.isPropBox = true
+
+if SERVER then
+    function SWEP:Initialize()
+        self:SetHoldType("normal")
+    end
+
+    function SWEP:PrimaryAttack()
+        if self.alalal then return end
+
+        local owner = self.Owner
+        owner:EmitSound("snd_jack_hmcd_jihad1.wav",75)
+        self.alalal = true
+
+        timer.Simple(math.Rand(0.5,1),function()
+            if not IsValid(owner) then return end
+            local pos = owner:GetPos() + owner:OBBCenter()
+
+            if isfunction(Explosive) then
+                Explosive("explosive_hidebomb",pos,nil,owner)
+            end
+
+            util.BlastDamage(owner,owner,pos,700,450)
+
+            local eff = EffectData()
+            eff:SetOrigin(pos)
+            eff:SetScale(2.5)
+            util.Effect("Explosion",eff)
+            sound.Play("ambient/explosions/explode_4.wav",pos,100,100)
+
+            for _, ply in ipairs(player.GetAll()) do
+                if IsValid(ply) and ply:Alive() then
+                    local dist = ply:GetPos():Distance(pos)
+                    if dist <= 700 then
+                        local d = DamageInfo()
+                        d:SetDamage(math.Clamp((1 - dist / 700) * 500, 75, 500))
+                        d:SetDamageType(DMG_BLAST)
+                        d:SetAttacker(owner)
+                        d:SetInflictor(owner)
+                        d:SetDamagePosition(pos)
+                        ply:TakeDamageInfo(d)
+                    end
+                end
+            end
+
+            if IsValid(owner) and owner:Alive() then
+                local d = DamageInfo()
+                d:SetDamage(10000)
+                d:SetDamageType(DMG_BLAST)
+                d:SetAttacker(owner)
+                d:SetInflictor(owner)
+                d:SetDamagePosition(pos)
+                owner:TakeDamageInfo(d)
+                if owner:Alive() then owner:Kill() end
+            end
+        end)
+    end
+else
+    function SWEP:PrimaryAttack() end
+
+    function SWEP:DrawWorldModel()
+        local owner = self.Owner
+        if not IsValid(owner) then self:DrawModel() return end
+
+        local mdl = self.worldModel
+        if not IsValid(mdl) then
+            mdl = ClientsideModel("models/props_junk/cardboard_jox004a.mdl")
+            mdl:SetNoDraw(true)
+            mdl:SetModelScale(0.5)
+
+            self.worldModel = mdl
+        end
+        self:CallOnRemove("huyhuy",function() mdl:Remove() end)
+
+        local matrix = self.Owner:GetBoneMatrix(11)
+        if not matrix then return end
+
+        mdl:SetRenderOrigin(matrix:GetTranslation()+matrix:GetAngles():Forward()*3+matrix:GetAngles():Right()*3)
+        mdl:SetRenderAngles(matrix:GetAngles())
+        mdl:DrawModel()
+    end
+end
+
+

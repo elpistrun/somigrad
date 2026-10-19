@@ -1,0 +1,63 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgame/tier_2_entities/traitor/explosive_hidebomb_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:117
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad/lua/hgame/tier_2_entities/traitor/explosive_hidebomb_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:4 <
+]]
+
+-- "addons\\homigrad\\lua\\hgame\\tier_2_entities\\traitor\\explosive_hidebomb_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local EXP = oop.Reg("explosive_hidebomb","explosive_base",true)
+if not EXP then return INCLUDE_BREAK end
+
+EXP.Damage = 100
+EXP.RadiusDamage = 250//наносит урон от взрывной волны
+EXP.RadiusStun = 400//оглушает взрывной волной
+
+EXP.FragCount = false
+
+// Client
+
+EXP.ParticleGround = "pcf_jack_groundsplode_small"
+EXP.ParticleAir = "100lb_air"
+
+EXP.Earrape = true
+EXP.ExplosiveWave = false
+EXP.ExplosivePunch = true
+
+EXP.Power = 2
+
+function EXP:EmitSound()
+    sound.Emit(self.parent,"snd_jack_fragsplodefar.ogg",140,1,100,self.pos)
+
+    for i = 1,4 do
+        sound.Emit(self.parent,"snd_jack_fragsplodeclose.ogg",90,1,200,self.pos)
+    end
+end
+
+if SERVER then
+    function EXP:ExplosiveLogicPost()
+        local ent = self.parent
+        if not IsValid(ent) then return end
+        
+        if util.GetSurfaceIndex(ent:GetBoneSurfaceProp(0)) == 3 or util.GetSurfaceIndex(ent:GetBoneSurfaceProp(0)) == 66 then
+            Explosive_FragSplosion(ent,self.pos,1024,50,3500,self.attacker)
+        end
+    end
+end

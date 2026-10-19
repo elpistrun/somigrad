@@ -1,0 +1,732 @@
+hg = hg or {}
+
+local PlayerMeta = FindMetaTable("Player")
+local EntityMeta = FindMetaTable("Entity")
+util.AddNetworkString("fake")
+util.AddNetworkString("RemoveRag")
+hg.Gibbed = hg.Gibbed or {}
+util.AddNetworkString("DeadBodies")
+util.AddNetworkString("unload")
+
+//Краткий гайд каким нужно делать рагдолл
+/*
+	Тянется к руке - Spine4 
+    На е двигаются - (Spine4,Spine2) (МЕНЬШЕ СКОРОСТЬ У Spine2)
+
+    Назад - 80 MaxSpeed
+    Вперёд - 80 MaxSpeed
+*/
+
+local BlackListWep = {
+	["weapon_hands"] = true,
+	["weapon_zombie"] = true,
+	["weapon_zombie_ghoul"] = true,
+	["weapon_zombie_wraith"] = true,
+	["weapon_zombie_fast"] = true,
+}
+
+hg.ragdollFake = {}
+
+net.Receive("fake",function(len,ply)
+	if not IsValid(ply) or not ply:Alive() or ply:GetNWBool("FakeDeath") or ply.isDead or ply:GetNWBool("isDead") or ply:Health() <= 0 then return end
+	if not hg.RateLimit(ply, "fake", 0.5) then return end
+	Faking(ply)
+end)
+
+net.Receive("unload",function(l,ply)
+	local ent = net.ReadEntity()
+	if not IsValid(ply) or not IsValid(ent) then return end
+	if ent:GetOwner() != ply then
+		ply:Kick("Unloads your game.")
+		return
+	end
+
+	if !ent.Clip1 then
+		return
+	end
+
+	if ent:Clip1() == 0 then
+		return
+	end
+
+	sound.Play("snd_jack_hmcd_ammotake.wav",hg.GetCurrentCharacter(ply):GetPos(),75,100,1)
+
+	ply:GiveAmmo(ent:Clip1(),ent:GetPrimaryAmmoType(),true)
+	ent:SetClip1(0)
+end)
+
+function PlayerMeta:RagView()
+	local ply = self
+	ply:Spectate(OBS_MODE_CHASE)
+	ply:SpectateEntity(ply:GetNWEntity("FakeRagdoll"))
+	ply:UnSpectate()
+
+	ply:SetCollisionGroup(COLLISION_GROUP_IN_VEHICLE)
+	ply:SetMoveType(MOVETYPE_OBSERVER)
+end
+
+function PlayerMeta:Notify(string)
+	self:ChatPrint(tostring(string))
+end
+
+function PlayerMeta:ChatPrintLocalized(string)
+	net.Start("localized_chat")
+    net.WriteString(tostring(string))
+    net.Send(self)
+end
+
+local weights = {
+	["models/css_seb_swat/css_swat.mdl"] = {[1] = 10},
+	["models/css_seb_swat/css_seb.mdl"] ={[1] = 10},
+
+	["models/gang_groove/gang_1.mdl"] =		   {[1] = 40},
+	["models/gang_groove/gang_2.mdl"] =		   {[1] = 40},
+	["models/gang_ballas/gang_ballas_1.mdl"] = {[1] = 40},
+	["models/gang_ballas/gang_ballas_2.mdl"] = {[1] = 40},
+}
+
+function PlayerMeta:CreateFake(force)
+    local rag = ents.Create("prop_ragdoll")
+    rag:SetNWEntity("RagdollOwner", self)
+    rag:SetModel(self:GetModel())
+    rag:SetSkin(self:GetSkin())
+    rag:Spawn()
+    rag:SetNWEntity("RagdollOwner", self)
+    rag:AddEFlags(EFL_NO_DAMAGE_FORCES)
+	rag:SetNWVector("PlayerColor",self:GetPlayerColor())
+    rag:Activate()
+
+	rag.Inventory = self.Inventory
+	rag.JModEntInv = self.JModEntInv
+	rag:SetNWEntity("JModEntInv",self.JModEntInv)
+	for i = 0,#self:GetBodyGroups() do
+		//print(rag:GetBodygroup(i))
+		rag:SetBodygroup(i,self:GetBodygroup(i))
+	end
+	if ROUND_NAME == "dr" then
+		self.TimeToDeath = CurTime() + 7
+		self:SetNWFloat("TimeToDeath",CurTime() + 7)
+	end
+	
+	rag.Appearance = self.Appearance
+
+	rag:SetNWString("PlayerName",self:Name())
+	rag:GetPhysicsObject():SetMass(12.775918006897)
+
+	if weights[rag:GetModel()] then
+		rag:GetPhysicsObject():SetMass(weights[rag:GetModel()][1])
+	end
+
+	if hg.ApplyFakeRagdollPhysics then
+		hg.ApplyFakeRagdollPhysics(rag)
+	else
+		for i = 0, rag:GetPhysicsObjectCount() - 1 do
+			local physobj = rag:GetPhysicsObjectNum(i)
+			if not IsValid(physobj) then continue end
+			physobj:EnableDrag(false)
+			physobj:SetDamping(0,0)
+		end
+	end
+
+    self.FakeRagdoll = rag
+
+    self:SetNWEntity("FakeRagdoll", rag)
+	rag.armor = self.armor
+
+	if rag.SetNetVar then rag:SetNetVar("Armor",self.armor) end
+
+    force = force or Vector(0, 0, 0)
+    local vel = self:GetVelocity() + force
+
+    for i = 0, rag:GetPhysicsObjectCount() - 1 do
+        local physobj = rag:GetPhysicsObjectNum(i)
+        if IsValid(physobj) then
+            local ragBoneName = rag:GetBoneName(rag:TranslatePhysBoneToBone(i))
+            local bone = self:LookupBone(ragBoneName)
+
+            if bone then
+                local vmat = self:GetBoneMatrix(bone)
+                if vmat then
+                    physobj:SetPos(vmat:GetTranslation(), true)
+                    physobj:SetAngles(vmat:GetAngles())
+                    physobj:AddVelocity(vel)
+                end
+            end
+        end
+    end
+
+    self:RagView()
+
+	local ply = self
+
+	rag.bull = ents.Create("npc_bullseye")
+	rag:SetNWEntity("RagdollController", ply)
+	rag:SetCollisionGroup(COLLISION_GROUP_NONE)
+	rag:AddCallback("PhysicsCollide",function(ent,data)
+		local speed = data.Speed or ent:GetVelocity():Length()
+		if speed < 620 then return end
+		if not IsValid(ply) or not ply:Alive() then return end
+		if hg.Gibbed[ply] then return end
+		hg.Gibbed[ply] = true
+		ply:SetNWBool("Gibbed",true)
+		hook.Run("HG_GibOnImpact",ply,ent,data,speed)
+		ply:Kill()
+	end)
+
+	local bull = rag.bull
+	local eyeatt = rag:GetAttachment(rag:LookupAttachment("eyes"))
+	local bodyphy = rag:GetPhysicsObjectNum(10)
+	if eyeatt and eyeatt.Pos then
+		bull:SetPos(eyeatt.Pos)
+	else
+		bull:SetPos(rag:GetPos() + Vector(0,0,40))
+	end
+	--bull:SetPos( eyeatt.Pos + eyeatt.Ang:Up() * 3.5 )
+	bull:SetAngles( rag:GetAngles() )
+	bull:SetMoveType(MOVETYPE_OBSERVER)
+	bull:SetKeyValue( "targetname", "Bullseye" )
+	--bull:SetParent(rag, rag:LookupAttachment("eyes"))
+	bull:SetKeyValue( "health","9999" )
+	bull:SetKeyValue( "spawnflags","256" )
+	bull:Spawn()
+	bull:Activate()
+	bull:SetNotSolid(true)
+	for i, ent in ipairs(ents.FindByClass("npc_*")) do
+		if not IsValid(ent) or not ent.AddEntityRelationship then continue end
+		ent:AddEntityRelationship(bull, ent:Disposition(ply),10000)
+	end
+	rag:AddFlags(FL_NOTARGET)
+	bull.rag = rag
+	bull.ply = ply
+
+    return rag
+end
+
+hook.Add("Think","VelocityFakeHitPlyCheck",function()
+	for i,rag in pairs(ents.FindByClass("prop_ragdoll")) do
+		if not IsValid(rag) then continue end
+
+		if rag.JModEntInv != NULL and IsValid(rag.JModEntInv) then
+			rag.JModEntInv:SetPos(rag:GetPos())
+		end
+
+		-- Flipping collision groups on live fakes makes them fall through the floor.
+		if rag.GetNWBool and rag:GetNWBool("IsFakeRagdoll") then continue end
+		if hg.RagdollOwner and IsValid(hg.RagdollOwner(rag)) then continue end
+
+		if rag:GetVelocity():Length() > 100 then
+			rag:SetCollisionGroup(COLLISION_GROUP_NONE)
+		else
+			rag:SetCollisionGroup(COLLISION_GROUP_WEAPON)
+		end
+	end
+end)
+
+hook.Add("PlayerSpawn","ResetFake",function(ply) --обнуление регдолла после вставания
+	ply:Give("weapon_hands")
+	ply:AddEFlags(EFL_NO_DAMAGE_FORCES)
+
+	if ply.PLYSPAWN_OVERRIDE then return end
+
+	if IsValid(ply.hgFakeRagdoll) or IsValid(ply.FakeRagdoll) then return end
+
+	ply.Fake = false
+	ply:SetNWBool("Fake",false)
+	ply:SetNWBool("fake",false)
+	ply.slots = {}
+	ply:SetNWEntity("Ragdoll",NULL)
+	ply:SetNWEntity("FakeRagdoll",NULL)
+	ply:SetNWEntity("DeathRagdoll",NULL)
+end)
+
+local function canFallFake(ply)
+	if not IsValid(ply) or not ply:Alive() then return false end
+	if ply:HasGodMode() then return false end
+	if ply:GetMoveType() == MOVETYPE_NOCLIP then return false end
+	if ply:InVehicle() then return false end
+	if ply.InFake and ply:InFake() then return false end
+	if ply.Fake then return false end
+	if ROUND_NAME == "dr" then return false end
+	return true
+end
+
+local function applyFallHurt(ply,dmg)
+	if dmg < 4 or not IsValid(ply) or not ply:Alive() or ply:HasGodMode() then return end
+
+	if CreateDamageTab and ply.TakeDamageTab then
+		local dmgTab = CreateDamageTab(ply,ply,nil,dmg,DMG_FALL)
+		dmgTab.pos = ply:GetPos()
+		dmgTab.pain = dmg * 1.2
+		dmgTab.force = vector_origin
+		ply:TakeDamageTab(dmgTab)
+	else
+		ply:TakeDamage(dmg,ply,ply)
+	end
+end
+
+local function tryEnterFake(ply)
+	if not IsValid(ply) or not ply:Alive() then return false end
+	if ply.InFake and ply:InFake() then return false end
+	if not ply.EnterFake then return false end
+
+	local ok,err = pcall(ply.EnterFake,ply)
+	if ok then return err == true end
+
+	if IsValid(ply) and not (ply.InFake and ply:InFake()) then
+		ply:SetNotSolid(false)
+		ply:SetCollisionGroup(COLLISION_GROUP_PLAYER)
+		ply:SetMoveType(MOVETYPE_WALK)
+		ply:SetGravity(1)
+		ply:SetNoDraw(false)
+	end
+
+	ErrorNoHalt("[hg] EnterFake: " .. tostring(err) .. "\n")
+	return false
+end
+
+local function hgFallImpact(ply,speed,drop)
+	if not canFallFake(ply) then return end
+	if (ply.hgFallHandled or 0) > CurTime() then return end
+
+	speed = tonumber(speed) or 0
+	drop = tonumber(drop) or 0
+
+	local dmg = 0
+	if speed >= 500 then
+		dmg = math.max(dmg,math.Clamp((speed - 470) * 0.52,8,250))
+	end
+	if drop >= 200 then
+		dmg = math.max(dmg,math.Clamp((drop - 160) * 0.42,6,250))
+	end
+
+	local shouldFake = speed >= 480 or drop >= 240
+	if dmg < 4 and not shouldFake then return end
+
+	ply.hgFallHandled = CurTime() + 0.25
+
+	if dmg >= 4 then applyFallHurt(ply,dmg) end
+
+	if IsValid(ply) and ply:Alive() and shouldFake then
+		tryEnterFake(ply)
+	end
+end
+
+-- Homigrad uses event.Call("Player Think"), not hook.Run. Fall fake must
+-- run on a real engine Think so it still works if other Lua errors.
+hook.Add("Think","HG FallFake",function()
+	for _,ply in ipairs(player.GetAll()) do
+		if not IsValid(ply) or not ply:Alive() then
+			if IsValid(ply) then
+				ply.hgFallMaxZ = nil
+				ply.hgWasAir = nil
+			end
+			continue
+		end
+
+		if ply.InFake and ply:InFake() then
+			ply.hgFallMaxZ = nil
+			ply.hgWasAir = nil
+			continue
+		end
+
+		local inAir = not ply:OnGround() and ply:WaterLevel() < 2 and ply:GetMoveType() ~= MOVETYPE_NOCLIP
+		local z = ply:GetPos().z
+
+		if inAir then
+			if not ply.hgWasAir then
+				ply.hgFallMaxZ = z
+				ply.hgWasAir = true
+			else
+				ply.hgFallMaxZ = math.max(ply.hgFallMaxZ or z,z)
+			end
+
+			if canFallFake(ply) then
+				local vel = ply:GetVelocity()
+				if -vel.z >= 380 or vel:Length() >= 380 then
+					tryEnterFake(ply)
+				end
+			end
+		elseif ply.hgWasAir then
+			local drop = (ply.hgFallMaxZ or z) - z
+			local speed = math.abs(ply:GetVelocity().z)
+			ply.hgWasAir = nil
+			ply.hgFallMaxZ = nil
+			if drop >= 240 or speed >= 480 then
+				hgFallImpact(ply,speed,drop)
+			end
+		end
+	end
+end)
+
+hook.Add("OnPlayerHitGround","HG FallDamage",function(ply,inWater,onFloater,speed)
+	if inWater or not IsValid(ply) then return end
+
+	local drop = 0
+	if ply.hgFallMaxZ then
+		drop = ply.hgFallMaxZ - ply:GetPos().z
+	end
+	ply.hgWasAir = nil
+	ply.hgFallMaxZ = nil
+
+	hgFallImpact(ply,speed,drop)
+end)
+
+-- Engine only uses this if mp_falldamage is 1. We apply HP in hgFallImpact.
+hook.Add("GetFallDamage","HG FallDamage",function(ply,speed)
+	return 0
+end)
+
+-- SHLib's OnPlayerHitGround returns true after Landing, which can eat later
+-- hit-ground hooks. Run fall damage inside Landing before that happens.
+event.Add("Landing","HG FallDamage",function(ply,inWater,onFloat,speed)
+	if inWater or not IsValid(ply) then return end
+
+	local drop = 0
+	if ply.hgFallMaxZ then
+		drop = ply.hgFallMaxZ - ply:GetPos().z
+	end
+
+	hgFallImpact(ply,speed,drop)
+end,-50)
+
+-- While the body is a fake corpse nothing is held and nothing can be taken into the
+-- hands: guns, the fists, grenades, medkits and food alike are refused, and nothing can
+-- be equipped at all.
+--
+-- The guard alone is not enough though: refusing a switch cannot take a weapon *out* of
+-- the hands, it only stops the next one, so a body that went down holding an R8 would keep
+-- it drawn in its fist. SetFakeState (main_sv.lua) therefore puts the held weapon away
+-- when the state flips, which is why the flag is checked here rather than a fresh state
+-- being computed.
+--
+-- weapon_hands stays switchable on purpose: it is not a weapon but the empty slot (no
+-- viewmodel, no world model), and ragdoll/init_cl.lua relies on seeing it to know that the
+-- corpse holds nothing.
+local function FakeNoWeapons(ply)
+	return IsValid(ply) and (ply.Fake or ply:GetNWBool("fake", false))
+end
+
+local function isAllowedFakeWep(wep)
+	if not IsValid(wep) then return false end
+	local class = wep:GetClass()
+	if class == "weapon_hands" then return true end
+	if string.sub(class, 1, 4) == "wep_" or wep.IsFireWeapon or wep.IsHomigradWeapon then return true end
+	return false
+end
+
+hook.Add("WeaponEquip","Homigrad_Fake",function(wep,ply)
+	if FakeNoWeapons(ply) then
+		if isAllowedFakeWep(wep) then return end
+		return true
+	end
+end)
+
+hook.Add("PlayerSwitchWeapon","Homigrad_Fake_Guns",function(ply,oldwep,wep)
+	if not FakeNoWeapons(ply) then return end
+	if isAllowedFakeWep(wep) then return end
+
+	return true
+end)
+
+function Faking(ply,force)
+    if not IsValid(ply) or not ply:Alive() or ply:GetNWBool("FakeDeath") or ply.isDead or ply:GetNWBool("isDead") or ply:Health() <= 0 then return end
+
+    if ply:InFake() then
+        return ply:ExitFake(false)
+    end
+
+    return ply:EnterFake(force)
+end
+
+function PlayerMeta:DropWep(wep,pos,vel,suicide)
+	local ply = self
+	if not vel then
+		vel = self:EyeAngles():Forward() * 220 + Vector(0,0,30)
+	end
+
+	wep = wep or ply:GetActiveWeapon()
+	if not IsValid(wep) then return end
+
+	local class = wep:GetClass()
+	if BlackListWep[class] then return end
+
+	ply:SetNWFloat("LastPickup",CurTime() + 0.3)
+	wep.IsSpawned = true
+
+	local inFake = (ply.InFake and ply:InFake()) or (ply.Fake and IsValid(ply.FakeRagdoll))
+	local dropPos = pos
+	if not dropPos then
+		if inFake then
+			local rag = ply.GetDummy and ply:GetDummy() or ply.FakeRagdoll
+			if IsValid(rag) then
+				local bone = rag:LookupBone("ValveBiped.Bip01_R_Hand") or rag:LookupBone("ValveBiped.Bip01_Spine4") or 6
+				local mat = (bone and bone >= 0) and rag:GetBoneMatrix(bone)
+				if mat then
+					dropPos = mat:GetTranslation() + Vector(0,0,5)
+				end
+			end
+		end
+		if not dropPos then
+			dropPos = ply:EyePos() + ply:EyeAngles():Forward() * 15 - Vector(0,0,10)
+		end
+	end
+
+	ply:DropWeapon(wep)
+
+	if IsValid(wep) then
+		wep:SetPos(dropPos)
+		local phys = wep:GetPhysicsObject()
+		if IsValid(phys) then
+			phys:Wake()
+			phys:SetVelocity(vel)
+			phys:AddAngleVelocity(VectorRand() * 60)
+		else
+			wep:SetVelocity(vel)
+		end
+	end
+
+	return wep
+end
+
+concommand.Add("drop",function(ply,cmd,args)
+	if not IsValid(ply) or not ply:Alive() then return end
+	if (ply.nextDropWep or 0) > CurTime() then return end
+	ply.nextDropWep = CurTime() + 0.4
+
+	local wep = tonumber(args[1]) and Entity(tonumber(args[1]))
+	if not IsValid(wep) or wep:GetOwner() ~= ply then
+		wep = ply:GetActiveWeapon()
+	end
+	if not IsValid(wep) then return end
+	local dropped = ply:DropWep(wep,nil,ply:EyeAngles():Forward() * 220 + Vector(0,0,30))
+	if dropped then
+		timer.Simple(0,function()
+			if IsValid(ply) and ply:Alive() and ply:HasWeapon("weapon_hands") then
+				ply:SelectWeapon("weapon_hands")
+			end
+		end)
+	end
+end)
+
+concommand.Add("hg_wep_drop",function(ply,cmd,args)
+	if not IsValid(ply) or not ply:Alive() then return end
+	if (ply.nextDropWep or 0) > CurTime() then return end
+	ply.nextDropWep = CurTime() + 0.4
+
+	local wep = tonumber(args[1]) and Entity(tonumber(args[1]))
+	if not IsValid(wep) or wep:GetOwner() ~= ply then
+		wep = ply:GetActiveWeapon()
+	end
+	if not IsValid(wep) then return end
+	local dropped = ply:DropWep(wep,nil,ply:EyeAngles():Forward() * 220 + Vector(0,0,30))
+	if dropped then
+		timer.Simple(0,function()
+			if IsValid(ply) and ply:Alive() and ply:HasWeapon("weapon_hands") then
+				ply:SelectWeapon("weapon_hands")
+			end
+		end)
+	end
+end)
+
+hook.Add("PlayerSay","DroppingFunction",function(ply,text)
+	if ply:GetActiveWeapon() == NULL and ply:Alive() then return "" end
+    if text == "*drop" then
+		ply:DropWep(nil,nil,ply:EyeAngles():Forward() * 160)
+        return ""
+    end
+end)
+
+hook.Add("PreCleanupMap","CleanUpFake",function()
+	for i, v in pairs(player.GetAll()) do
+		v.LastRagdollTime = 0
+		if v.Fake then
+			if v.ExitFake then v:ExitFake(true) else Faking(v) end
+		end
+	end
+	BleedingEntities = {}
+end)
+
+RagdollOwner = hg.RagdollOwner
+
+hg.Faking = Faking
+
+hook.Add("PlayerDeath", "DeathRagdoll", function(ply, att, dmginfo)
+	if hg.Gibbed[ply] then return end
+	ply.LastRagdollTime = 0
+
+	local rag = ply.FakeRagdoll or ply.hgFakeRagdoll
+	if not IsValid(rag) then return end
+
+	timer.Simple(0,function()
+		if not IsValid(rag) then return end
+
+		if IsValid(rag.bull) then
+			rag.bull:Remove()
+		end
+
+		if IsValid(rag.ZacConsRH) then
+			rag.ZacConsRH:Remove()
+		elseif istable(rag.ZacConsRH) and rag.ZacConsRH.worldPin and IsValid(rag.ZacConsRH.phys) then
+			rag.ZacConsRH.phys.hgWorldPinned = nil
+			rag.ZacConsRH.phys:EnableMotion(true)
+		end
+	
+		if IsValid(rag.ZacConsLH) then
+			rag.ZacConsLH:Remove()
+		elseif istable(rag.ZacConsLH) and rag.ZacConsLH.worldPin and IsValid(rag.ZacConsLH.phys) then
+			rag.ZacConsLH.phys.hgWorldPinned = nil
+			rag.ZacConsLH.phys:EnableMotion(true)
+		end
+	end)
+end)
+
+hook.Add("PlayerUse","KysUseInFake",function(ply)
+	if ply.InFake and ply:InFake() then return false end
+end)
+
+hook.Add("PhysgunPickup", "DropPlayer2", function(ply,ent)
+		if ent:IsPlayer() and !ent.Fake and ply:IsSuperAdmin() then
+
+			ent.isheld=true
+
+			Faking(ent)
+			return false
+		end
+end)
+
+event.Add("Player Think","FakeThink",function(ply,time)
+	if not IsValid(ply) then return end
+	-- EnterFake ragdolls are driven by HG Fake Movement, not this leftover path.
+	if IsValid(ply.hgFakeRagdoll) then return end
+	if not ply.Fake or not ply:Alive() then return end
+
+	local rag = ply.FakeRagdoll
+	if not IsValid(rag) then
+		ply.Fake = false
+		ply:SetNWBool("Fake",false)
+		ply:SetNWBool("fake",false)
+		ply:SetNWEntity("FakeRagdoll",NULL)
+		ply:SetNWBool("RightArm",false)
+		ply:SetNWBool("LeftArm",false)
+		return
+	end
+
+	ply:SetNWBool("Fake",true)
+	ply:SetNWEntity("FakeRagdoll",rag)
+	rag.Inventory = ply.Inventory
+	rag.JModEntInv = ply.JModEntInv
+	if rag.SetNetVar then rag:SetNetVar("Armor",ply.armor) end
+	rag.armor = ply.armor
+	rag:SetNWEntity("JModEntInv",IsValid(ply.JModEntInv) and ply.JModEntInv or NULL)
+	rag:SetNWString("PlayerName",ply:Name())
+	if ROUND_NAME == "dr" then
+		if ply.TimeToDeath and ply.TimeToDeath < CurTime() then
+			ply:Kill()
+			rag:Dissolve(2,0,rag:GetPos())
+		end
+	end
+	ply:SetNWBool("RightArm",IsValid(rag.ZacConsRH))
+	ply:SetNWBool("LeftArm",IsValid(rag.ZacConsLH))
+	local eyesId = rag:LookupAttachment("eyes")
+	local attachment = eyesId and eyesId > 0 and rag:GetAttachment(eyesId)
+	if not attachment then
+		ply:SetPos(rag:GetPos())
+		return
+	end
+	local dist = (attachment.Ang:Forward()*10000):Distance(ply:GetAimVector()*10000)
+	local distmod = math.Clamp(1-(dist/20000),0.1,1)
+	local lookat = LerpVector(distmod,attachment.Ang:Forward()*100000,ply:GetAimVector()*100000)
+	local LocalPos, LocalAng = WorldToLocal( lookat, Angle( 0, 0, 0 ), attachment.Pos, attachment.Ang )
+	local AddVecRag = Vector(0,0,-64)
+	if IsValid(rag.bull) then
+		rag.bull:SetPos(attachment.Pos + attachment.Ang:Forward() * 5  + attachment.Ang:Up() * -5)
+	end
+    local Head = rag:LookupBone("ValveBiped.Bip01_Head1")
+	if Head == nil or Head < 0 then return end
+    local HeadPos = rag:GetBonePosition(Head) + AddVecRag
+	if !ply.PrevAng then
+		ply.PrevAng = ply:EyeAngles()
+	end
+
+	ply.PrevAng = LerpAngleFT(0.1,ply.PrevAng,ply:EyeAngles())
+
+	local ydiff = math.AngleDifference(ply.PrevAng.y,ply:EyeAngles().y)
+	local y_diff_round = math.Round(ydiff / 5,1)
+
+	local pdiff = math.AngleDifference(ply.PrevAng.p,ply:EyeAngles().p)
+	local p_diff_round = math.Round(pdiff / 5,1)
+	ply:SetPos(HeadPos)
+	ply:SetMaterial(rag:GetMaterial())
+	if !ply.otrub then rag:SetEyeTarget( LocalPos ) else rag:SetEyeTarget( Vector(0,0,0) ) end
+	if ply.otrub then
+		if IsValid(rag.ZacConsRH) then
+			rag.ZacConsRH:Remove()
+		elseif istable(rag.ZacConsRH) and rag.ZacConsRH.worldPin and IsValid(rag.ZacConsRH.phys) then
+			rag.ZacConsRH.phys.hgWorldPinned = nil
+			rag.ZacConsRH.phys:EnableMotion(true)
+		end
+	
+		if IsValid(rag.ZacConsLH) then
+			rag.ZacConsLH:Remove()
+		elseif istable(rag.ZacConsLH) and rag.ZacConsLH.worldPin and IsValid(rag.ZacConsLH.phys) then
+			rag.ZacConsLH.phys.hgWorldPinned = nil
+			rag.ZacConsLH.phys:EnableMotion(true)
+		end
+	return
+	end
+	rag = ply.FakeRagdoll
+	
+	if ply:InVehicle() then
+		ply:ExitVehicle()
+	end
+	ply:SetNWBool("Fake",ply.Fake)
+    rag:SetFlexWeight(9,0)
+
+	hook.Run("FakeControl",ply,rag)
+end)
+
+hook.Add("PlayerSpawn","collide",function(ply)
+	ply:AddCallback("PhysicsCollide",function(ent,data) hook.Run("Player Collide",ply,ent,data) end)
+end)
+
+function PlayerMeta:IsStandingOn(ent)
+	local tr = {
+		start = self:EyePos(),
+		endpos = self:EyePos() - vector_up * 82,
+		filter = self
+	}
+	
+	local zhopa = util.TraceLine(tr)
+
+	//print(ent,zhopa.Entity)
+
+	if zhopa.Entity == ent then
+		return true
+	else
+		return false
+	end
+
+	return false
+end
+
+hook.Add("Player Collide","Ragdolling-Collide",function(ply,ent,data)
+	local LIMIT_MASS = 100
+	local LIMIT_SPEED = 280
+	if ROUND_NAME == "dr" then
+		return
+	end
+	if not IsValid(ply) or not IsValid(ent) or ent == ply then return end
+	local phys = ent.GetPhysicsObject and ent:GetPhysicsObject()
+	local speed = ent:GetVelocity():Length()
+	local heavy = IsValid(phys) and phys:GetMass() > LIMIT_MASS
+	if (speed > LIMIT_SPEED or (heavy and speed > LIMIT_SPEED / 2)) and not ply:IsStandingOn(ent) then
+		//print(!ply:IsStandingOn(ent))
+		timer.Simple(0,function()
+			if not IsValid(ply) or ply.Fake or (ply.InFake and ply:InFake()) then return end
+			if IsValid(ent) and ent:IsPlayerHolding() then
+				return 
+			end
+			Faking(ply)
+		end)
+	end
+end)

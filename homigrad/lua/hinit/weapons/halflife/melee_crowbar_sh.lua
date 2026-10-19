@@ -1,0 +1,44 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hinit/weapons/halflife/melee_crowbar_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad\\lua\\hinit\\weapons\\halflife\\melee_crowbar_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local SWEP = oop.Reg("melee_crowbar_halflife","melee_metalbat")
+if not SWEP then return end
+
+SWEP.PrintName = "Монтировка"
+SWEP.Instructions = ""
+SWEP.Category = L("weapon_category_hl2")
+
+SWEP.WorldModel = "models/sirgibs/hl2/weapons/crowbar.mdl"
+
+SWEP.EnableTransformModel = true
+
+SWEP.wmVector = Vector(3.5,3,0)
+SWEP.wmAngle = Angle(70,0,180)
+
+SWEP.Primary.Damage = 27
+SWEP.DamagePain = 35
+
+SWEP.dwsItemPos = Vector(0,3,0)
+SWEP.dwsItemAng = Angle(90 + 45,0,90)
+SWEP.dwsItemFOV = -3
+
+SWEP.HoldType = "melee"

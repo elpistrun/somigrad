@@ -1,0 +1,1596 @@
+local PLAYER = FindMetaTable("Player")
+
+hg = hg or {}
+
+util.AddNetworkString("hg_fake_opts")
+
+-- Pooled Homigrad names. Idle strings stop leftover clients from spamming "unpooled".
+local hgFakeNets = {
+    "plankton","ShowKot","showiconleft","showiconright","hideiconleft","hideiconright",
+    "shlem","shlem reset","damage bol","ragplayercolor","bp headshoot explode",
+    "blood particle explode","bp fall","blyed","blood particle","bleed artery",
+    "blood particle more","bp buckshoot","bp hit","GIBHEAD",
+}
+for i = 1,#hgFakeNets do
+    util.AddNetworkString(hgFakeNets[i])
+end
+net.Receive("hg_fake_opts",function(_,ply)
+    if not IsValid(ply) then return end
+    if hg.RateLimit and not hg.RateLimit(ply,"fake_opts",0.2) then return end
+    ply.hgRagAlwaysE = net.ReadBool()
+    ply.hgRagCaveSpine = net.ReadBool()
+end)
+
+local fakePlayers = {}
+local standMins = Vector(-16,-16,0)
+local standMaxs = Vector(16,16,72)
+
+local function SetFakeState(ply,rag)
+    local active = IsValid(rag)
+
+    if active then
+        -- A dropped body holds nothing, and the switch is refused for every weapon while
+        -- the fake flag is up (sv_fake.lua), so whatever was out has to leave the hands
+        -- *before* the flag flips -- a refused switch leaves the weapon deployed.
+        local wep = ply:GetActiveWeapon()
+
+        if IsValid(wep) and wep:GetClass() ~= "weapon_hands" then
+            local isGun = (string.sub(wep:GetClass(), 1, 4) == "wep_") or wep.IsFireWeapon or wep.IsHomigradWeapon
+            if not isGun then
+                -- The pack's own "the body went limp" contract: a weapon may decide what
+                -- happens to itself, e.g. a lit grenade is thrown (wep_gnade_base:SetFakeWep).
+                if wep.SetFakeWep then pcall(wep.SetFakeWep,wep) end
+
+                -- weapon_hands is the empty slot, not a weapon: no viewmodel, no world model
+                -- and no actions in fake (see its InFakeNoHands guard).
+                local hands = ply:GetWeapon("weapon_hands")
+
+                if IsValid(hands) then ply:SelectWeapon("weapon_hands") end
+            end
+        end
+    end
+
+    ply.Fake = active
+    ply.FakeRagdoll = active and rag or nil
+    ply.hgFakeRagdoll = active and rag or nil
+    ply.CanMove = not active
+
+    ply:SetDummy(active and rag or nil)
+    ply:SetNWBool("fake",active)
+    ply:SetNWBool("Fake",active)
+    ply:SetNWEntity("FakeRagdoll",active and rag or NULL)
+    ply:SetNWEntity("Ragdoll",active and rag or NULL)
+    ply:SetNWEntity("DeathRagdoll",active and rag or NULL)
+    ply.fake = active
+    ply.fakeragdoll = active and rag or nil
+    ply:SetNoDraw(active)
+    ply:SetNotSolid(active)
+    if ply.DrawViewModel then pcall(ply.DrawViewModel,ply,not active) end
+
+    if active then
+        ply:SetMoveType(MOVETYPE_NONE)
+        ply:SetCollisionGroup(COLLISION_GROUP_IN_VEHICLE)
+    else
+        ply:SetMoveType(MOVETYPE_WALK)
+        ply:SetCollisionGroup(COLLISION_GROUP_PLAYER)
+        ply:SetNotSolid(false)
+        ply:SetNWBool("LeftArm",false)
+        ply:SetNWBool("RightArm",false)
+    end
+end
+
+-- Bone name aliases for different model skeletons
+-- Some models use ValveBiped names, others use bip_* or different conventions
+local boneAliases = {
+    Head = {"ValveBiped.Bip01_Head1","bip_head"},
+    Neck = {"ValveBiped.Bip01_Neck1","bip_neck"},
+    Spine4 = {"ValveBiped.Bip01_Spine4","ValveBiped.Bip01_Spine3","bip_spine_3"},
+    Spine2 = {"ValveBiped.Bip01_Spine2","bip_spine_2"},
+    Spine1 = {"ValveBiped.Bip01_Spine1","bip_spine_1"},
+    Spine = {"ValveBiped.Bip01_Spine","bip_spine_0"},
+    Pelvis = {"ValveBiped.Bip01_Pelvis","bip_pelvis"},
+    CalfR = {"ValveBiped.Bip01_R_Calf","bip_r_calf"},
+    CalfL = {"ValveBiped.Bip01_L_Calf","bip_l_calf"},
+    ThighR = {"ValveBiped.Bip01_R_Thigh","bip_r_thigh"},
+    ThighL = {"ValveBiped.Bip01_L_Thigh","bip_l_thigh"},
+    UArmL = {"ValveBiped.Bip01_L_UpperArm","bip_l_upperarm","bip_l_uparm"},
+    UArmR = {"ValveBiped.Bip01_R_UpperArm","bip_r_upperarm","bip_r_uparm"},
+    FArmL = {"ValveBiped.Bip01_L_Forearm","bip_l_forearm"},
+    FArmR = {"ValveBiped.Bip01_R_Forearm","bip_r_forearm"},
+    HandL = {"ValveBiped.Bip01_L_Hand","bip_l_hand","ValveBiped.Bip01_L_Wrist","bip_l_wrist"},
+    HandR = {"ValveBiped.Bip01_R_Hand","bip_r_hand","ValveBiped.Bip01_R_Wrist","bip_r_wrist"},
+}
+
+local function resolvePhysBone(rag,key)
+    local aliases = boneAliases[key]
+    if not aliases then return nil end
+    for _,name in ipairs(aliases) do
+        local boneId = rag:LookupBone(name)
+        if boneId == nil or boneId < 0 then continue end
+
+        local physBone = rag:TranslateBoneToPhysBone(boneId)
+        if physBone == nil or physBone < 0 then continue end
+
+        local phys = rag:GetPhysicsObjectNum(physBone)
+        if IsValid(phys) then return phys end
+    end
+    return nil
+end
+
+local function CopyPlayerPose(ply,rag,vel)
+    if not isvector(vel) then vel = ply:GetVelocity() end
+    if not isvector(vel) then vel = vector_origin end
+    if vel:Length() > 1200 then vel = vel:GetNormalized() * 1200 end
+
+    for physID = 0,rag:GetPhysicsObjectCount() - 1 do
+        local phys = rag:GetPhysicsObjectNum(physID)
+        local bone = rag:TranslatePhysBoneToBone(physID)
+
+        if not IsValid(phys) or bone == nil or bone < 0 then continue end
+
+        local pos,ang = ply:GetBonePosition(bone)
+        if pos and ang then
+            phys:SetPos(pos,true)
+            phys:SetAngles(ang)
+        end
+
+        phys:EnableGravity(true)
+        phys:EnableDrag(true)
+        phys:SetDamping(0.8, 3.5)
+        if phys.SetDragCoefficient then phys:SetDragCoefficient(1) end
+        phys:SetVelocity(vel)
+        phys:Wake()
+    end
+end
+
+-- Citizen ragdoll masses from original Homigrad. Custom playermodels often ship
+-- with 50-100+ kg bones; without this the body feels like a sack of bricks.
+local IdealMassPlayer = {
+    ["ValveBiped.Bip01_Pelvis"] = 32.0,
+    ["ValveBiped.Bip01_Spine"] = 26.0,
+    ["ValveBiped.Bip01_Spine1"] = 32.0,
+    ["ValveBiped.Bip01_Spine2"] = 45.0,
+    ["ValveBiped.Bip01_Spine4"] = 24.0,
+    ["ValveBiped.Bip01_Neck1"] = 5.0,
+    ["ValveBiped.Bip01_Head1"] = 10.0,
+    ["ValveBiped.Bip01_R_Clavicle"] = 4.0,
+    ["ValveBiped.Bip01_L_Clavicle"] = 4.0,
+    ["ValveBiped.Bip01_R_UpperArm"] = 7.0,
+    ["ValveBiped.Bip01_L_UpperArm"] = 7.0,
+    ["ValveBiped.Bip01_L_Forearm"] = 4.0,
+    ["ValveBiped.Bip01_R_Forearm"] = 4.0,
+    ["ValveBiped.Bip01_L_Hand"] = 2.5,
+    ["ValveBiped.Bip01_R_Hand"] = 2.5,
+    ["ValveBiped.Bip01_R_Thigh"] = 22.0,
+    ["ValveBiped.Bip01_L_Thigh"] = 22.0,
+    ["ValveBiped.Bip01_R_Calf"] = 12.0,
+    ["ValveBiped.Bip01_L_Calf"] = 12.0,
+    ["ValveBiped.Bip01_L_Foot"] = 6.0,
+    ["ValveBiped.Bip01_R_Foot"] = 6.0,
+}
+
+local function getIdealBoneMass(boneName)
+    if not boneName or boneName == "" then return 10 end
+    if IdealMassPlayer[boneName] then return IdealMassPlayer[boneName] end
+
+    local n = boneName:lower()
+    if n:find("finger",1,true) then return 0.5 end
+    if n:find("head",1,true) then return 10.0 end
+    if n:find("pelvis",1,true) then return 32.0 end
+    if n:find("neck",1,true) then return 5.0 end
+    if n:find("clavicle",1,true) then return 4.0 end
+    if n:find("upperarm",1,true) or n:find("uparm",1,true) then return 7.0 end
+    if n:find("forearm",1,true) then return 4.0 end
+    if n:find("hand",1,true) or n:find("wrist",1,true) then return 2.5 end
+    if n:find("thigh",1,true) then return 22.0 end
+    if n:find("calf",1,true) then return 12.0 end
+    if n:find("foot",1,true) then return 6.0 end
+    if n:find("spine4",1,true) or n:find("spine_3",1,true) or n:find("spine3",1,true) then return 24.0 end
+    if n:find("spine2",1,true) or n:find("spine_2",1,true) then return 45.0 end
+    if n:find("spine1",1,true) or n:find("spine_1",1,true) then return 32.0 end
+    if n:find("spine",1,true) then return 26.0 end
+
+    return 10
+end
+
+local function ApplyHomigradRagdollPhysics(rag)
+    if not IsValid(rag) then return end
+
+    -- Solid heavy grounded Homigrad ragdoll with realistic inertia and natural joint damping.
+    for i = 0,rag:GetPhysicsObjectCount() - 1 do
+        local phys = rag:GetPhysicsObjectNum(i)
+        if not IsValid(phys) then continue end
+
+        local bone = rag:TranslatePhysBoneToBone(i)
+        local boneName = (bone ~= nil and bone >= 0) and rag:GetBoneName(bone) or ""
+        local mass = math.max(getIdealBoneMass(boneName),0.5)
+
+        phys:SetMass(mass)
+        phys:EnableGravity(true)
+        phys:EnableDrag(true)
+        phys:SetDamping(0.8, 4.0)
+        if phys.SetDragCoefficient then phys:SetDragCoefficient(1) end
+        if phys.SetAngleDragCoefficient then phys:SetAngleDragCoefficient(1) end
+        phys:Wake()
+    end
+end
+
+hg.ApplyFakeRagdollPhysics = ApplyHomigradRagdollPhysics
+
+local impactBoneMul = {
+    head = 1.75,
+    neck = 1.6,
+    spine = 1.15,
+    pelvis = 1.15,
+    thigh = 0.7,
+    calf = 0.55,
+    foot = 0.5,
+    upperarm = 0.7,
+    forearm = 0.5,
+    hand = 0.45,
+}
+
+local function impactBoneScale(rag,phys)
+    if not IsValid(rag) or not IsValid(phys) then return 1 end
+
+    for i = 0,rag:GetPhysicsObjectCount() - 1 do
+        if rag:GetPhysicsObjectNum(i) ~= phys then continue end
+
+        local bone = rag:TranslatePhysBoneToBone(i)
+        local name = (bone ~= nil and bone >= 0) and rag:GetBoneName(bone) or ""
+        name = string.lower(name)
+
+        for key,mul in pairs(impactBoneMul) do
+            if string.find(name,key,1,true) then return mul end
+        end
+
+        return 1
+    end
+
+    return 1
+end
+
+local function applyFakeImpactDamage(ply,rag,data)
+    if not IsValid(ply) or not ply:Alive() or ply:HasGodMode() then return end
+    if not IsValid(rag) then return end
+    if (rag.LastImpactDmg or 0) > CurTime() then return end
+
+    local hit = data.HitEntity
+    if rag == hit then return end
+    if IsValid(hit) and hit:IsPlayerHolding() then return end
+    if IsValid(hit) and hit:IsRagdoll() then return end
+
+    local delta = data.DeltaTime
+    if delta and delta > 0 and delta < 0.12 then return end
+
+    local ours = data.OurOldVelocity or vector_origin
+    local theirs = data.TheirOldVelocity or vector_origin
+    local rel = ours - theirs
+    local speed = rel:Length()
+    if speed < 420 then return end
+    if (rag.FakeSpawnTime or 0) + 0.12 > CurTime() and speed < 650 then return end
+
+    local hitNormal = data.HitNormal
+    if not isvector(hitNormal) or hitNormal:LengthSqr() < 0.01 then
+        hitNormal = vector_up
+    else
+        hitNormal = hitNormal:GetNormalized()
+    end
+
+    local impact = math.abs(rel:GetNormalized():Dot(hitNormal))
+    if impact < 0.18 then return end
+
+    local dmg = (speed - 400) * 0.055 * impact * impactBoneScale(rag,data.PhysObject)
+    dmg = math.Clamp(dmg,0,85)
+    if dmg < 2 then return end
+
+    rag.LastImpactDmg = CurTime() + 0.18
+
+    local hitPos = data.HitPos or rag:GetPos()
+
+    -- Check if the colliding physics bone is the head or neck
+    local isHead = false
+    local isNeck = false
+    local hitPhys = data.PhysObject
+    if IsValid(rag) and IsValid(hitPhys) then
+        for i = 0, rag:GetPhysicsObjectCount() - 1 do
+            if rag:GetPhysicsObjectNum(i) == hitPhys then
+                local bone = rag:TranslatePhysBoneToBone(i)
+                local bName = (bone and bone >= 0) and string.lower(rag:GetBoneName(bone)) or ""
+                if string.find(bName,"head",1,true) then
+                    isHead = true
+                elseif string.find(bName,"neck",1,true) then
+                    isNeck = true
+                end
+                break
+            end
+        end
+    end
+
+    if not isHead and not isNeck and IsValid(rag) and hitPos then
+        local headBone = rag:LookupBone("ValveBiped.Bip01_Head1") or rag:LookupBone("head")
+        if headBone then
+            local hp = rag:GetBonePosition(headBone)
+            if hp and hp ~= vector_origin and hitPos:Distance(hp) <= 26 then
+                isHead = true
+            end
+        end
+        local neckBone = rag:LookupBone("ValveBiped.Bip01_Neck1") or rag:LookupBone("neck")
+        if neckBone then
+            local np = rag:GetBonePosition(neckBone)
+            if np and np ~= vector_origin and hitPos:Distance(np) <= 20 then
+                isNeck = true
+            end
+        end
+    end
+
+    if isHead or isNeck then
+        -- High/catastrophic fall on head: snaps neck (no head explosion in fake, reserved for firearms)
+        if (speed >= 380 or dmg >= 22) and impact >= 0.20 then
+            sound.Play("physics/body/body_medium_break3.wav", hitPos, 85, math.random(95,105))
+            sound.Play("physics/flesh/flesh_bloody_break.wav", hitPos, 80, 90)
+            sound.Play("physics/flesh/flesh_squishy_impact_hard" .. math.random(1,4) .. ".wav", hitPos, 80, 105)
+            util.Decal("Blood", hitPos + hitNormal * 6, hitPos - hitNormal * 32, {rag, ply})
+
+            rag.hgIsDeathCorpse = true
+            rag:SetNWBool("hgDeathCorpse",true)
+            rag:SetNWString("Nick",ply:Nick())
+            rag:SetNWString("PlayerName",ply:Nick())
+            rag.pulse = 0
+            rag:SetNWFloat("pulse", 0)
+            ply.pulse = 0
+            ply:SetNWFloat("pulse", 0)
+            ply.heartstop = true
+            ply:SetNWBool("heartstop", true)
+            ply.isDead = true
+            ply:SetNWBool("isDead",true)
+            ply:SetNWBool("Alive",false)
+            ply:SetNWBool("FakeDeath",true)
+            ply.LastDmg = {
+                reasons = { neck = true, neckSnap = true },
+                target = ply,
+                att = ply,
+                weapon = "world",
+                boneName = "neck",
+                killedBy = "fall",
+                killedTargetName = "Neck Snap"
+            }
+            ply:Kill()
+            return
+        end
+
+        -- Lower speed neck trauma: knockout and pain
+        if speed >= 200 then
+            ply.Otrub = true
+            ply.pain = (ply.pain or 0) + 85
+            sound.Play("physics/body/body_medium_break" .. math.random(2,4) .. ".wav", hitPos, 75, 100)
+        end
+    end
+
+    if CreateDamageTab and ply.TakeDamageTab then
+        local dmgTab = CreateDamageTab(ply,ply,nil,dmg,bit.bor(DMG_FALL,DMG_CRUSH))
+        dmgTab.pos = hitPos
+        dmgTab.pain = dmg * 1.15
+        dmgTab.bleed = dmg > 22 and (dmg * 0.07) or 0
+        dmgTab.stopBleed = dmg <= 22
+        dmgTab.force = vector_origin
+        ply:TakeDamageTab(dmgTab)
+    else
+        ply:TakeDamage(dmg,ply,rag)
+    end
+end
+
+function hg.BindFakeRagdollImpact(rag,ply)
+    if not IsValid(rag) then return end
+
+    rag:AddCallback("PhysicsCollide",function(_,data)
+        if not istable(data) then return end
+
+        local copy = {
+            HitEntity = data.HitEntity,
+            HitNormal = data.HitNormal,
+            HitPos = data.HitPos,
+            PhysObject = data.PhysObject,
+            OurOldVelocity = data.OurOldVelocity,
+            TheirOldVelocity = data.TheirOldVelocity,
+            DeltaTime = data.DeltaTime,
+            Speed = data.Speed,
+        }
+
+        timer.Simple(0,function()
+            local owner = ply
+            if not IsValid(owner) then owner = hg.RagdollOwner(rag) end
+            applyFakeImpactDamage(owner,rag,copy)
+        end)
+    end)
+end
+
+function PLAYER:EnterFake(force)
+    if self:InVehicle() or self:InFake() then return false end
+    if not self:Alive() and not self.hgAllowDeadFake then return false end
+
+    local mdl = self:GetModel()
+    if not util.IsValidRagdoll(mdl) then
+        mdl = "models/player/group01/male_01.mdl"
+    end
+    if not util.IsValidRagdoll(mdl) then return false end
+
+    local keepVel = self:GetVelocity()
+    if not isvector(keepVel) then keepVel = vector_origin end
+
+    self:SetNotSolid(true)
+    self:SetMoveType(MOVETYPE_NONE)
+
+    local function abortFake()
+        self:SetNotSolid(false)
+        self:SetCollisionGroup(COLLISION_GROUP_PLAYER)
+        self:SetMoveType(MOVETYPE_WALK)
+        return false
+    end
+
+    local rag = ents.Create("prop_ragdoll")
+    if not IsValid(rag) then return abortFake() end
+
+    rag:SetModel(mdl)
+    rag:SetPos(self:GetPos())
+    rag:SetAngles(self:GetAngles())
+    rag:SetSkin(self:GetSkin())
+    rag:SetColor(self:GetColor())
+    rag:SetNW2Vector("modelcolor",self:GetPlayerColor())
+    rag:AddEFlags(EFL_NO_DAMAGE_FORCES)
+
+    for id = 0,self:GetNumBodyGroups() - 1 do
+        rag:SetBodygroup(id,self:GetBodygroup(id))
+    end
+
+    rag:Spawn()
+    rag:Activate()
+
+    if not IsValid(rag:GetPhysicsObject()) then rag:Remove() return abortFake() end
+
+    ApplyHomigradRagdollPhysics(rag)
+
+    CopyPlayerPose(self,rag,keepVel)
+
+    rag:SetController(self)
+    rag:SetNWEntity("RagdollController",self)
+    rag:SetNWEntity("RagdollOwner",self)
+    rag:SetNWVector("PlayerColor",self:GetPlayerColor())
+    rag:SetPVSVar("IsFakeRagdoll",true)
+    rag:SetPVSVar("PlayerColor",self:GetPlayerColor())
+    rag:SetNWBool("IsFakeRagdoll",true)
+    rag:SetCollisionGroup(COLLISION_GROUP_NONE)
+    rag.FakeSpawnTime = CurTime()
+    hg.BindFakeRagdollImpact(rag,self)
+    rag:CallOnRemove("HG_FakeOwner",function(ent)
+        local ply = ent:GetController()
+        if not IsValid(ply) then ply = ent:GetNWEntity("RagdollOwner") end
+        if IsValid(ply) and (ply:GetDummy() == ent or ply.hgFakeRagdoll == ent or ply.FakeRagdoll == ent) then
+            fakePlayers[ply] = nil
+            SetFakeState(ply)
+        end
+    end)
+
+    self.hgFakeRagdoll = rag
+    fakePlayers[self] = rag
+    SetFakeState(self,rag)
+    if self:Alive() then self:SetNWBool("FakeDeath",false) end
+
+    if force and isvector(force) then
+        if force:Length() > 6000 then force = force:GetNormalized() * 6000 end
+        local phys = rag:GetPhysicsObject()
+        if IsValid(phys) then phys:ApplyForceCenter(force) end
+    end
+
+    return true
+end
+
+function PLAYER:ExitFake(force)
+    local rag = self:GetDummy()
+    if not IsValid(rag) or rag == self then
+        fakePlayers[self] = nil
+        SetFakeState(self)
+        return false
+    end
+
+    -- Dead players CANNOT stand up!
+    if not self:Alive() or self:InFakeDeath() or self:GetNWBool("FakeDeath") or self.isDead or self:GetNWBool("isDead") or self:Health() <= 0 then
+        return false
+    end
+
+    -- Unconscious / broken spine / cuffed cannot stand back up.
+    if not force then
+        if self:GetNWBool("Cuffs",false) or self.isHandcuffed or (IsValid(rag) and (rag:GetNWBool("Cuffs",false) or rag.isHandcuffed)) then return false end
+        if self.Otrub or self:GetNW2Bool("Otrub",false) or self:GetNWBool("Otrub",false) then return false end
+        if self.brokenspine or (self.Organs and (self.Organs.spine or 1) <= 0) then return false end
+    end
+
+    if not force and rag:GetVelocity():LengthSqr() > 62500 then return false end
+
+    local pos = rag:GetPos()
+    local pelvis = rag:LookupBone("ValveBiped.Bip01_Pelvis") or rag:LookupBone("bip_pelvis")
+    if pelvis ~= nil and pelvis >= 0 then
+        local matrix = rag:GetBoneMatrix(pelvis)
+        if matrix then pos = matrix:GetTranslation() end
+    end
+
+    local tr = util.TraceHull({
+        start = pos + Vector(0,0,8),
+        endpos = pos + Vector(0,0,40),
+        mins = standMins,
+        maxs = standMaxs,
+        filter = {self,rag},
+        mask = MASK_PLAYERSOLID
+    })
+
+    if not force and tr.Hit then return false end
+
+    fakePlayers[self] = nil
+    self.hgFakeRagdoll = nil
+    rag:RemoveCallOnRemove("HG_FakeOwner")
+    SetFakeState(self)
+    self:SetPos(tr.HitPos)
+    self:SetVelocity(rag:GetVelocity())
+    rag:Remove()
+
+    return true
+end
+
+concommand.Add("fake_dead",function(ply,cmd,args)
+    if not IsValid(ply) or not ply:InFake() or not ply:Alive() or ply.isDead or ply:GetNWBool("isDead") or ply:Health() <= 0 then return end
+    ply:SetNWBool("FakeDeath",tonumber(args[1] or "0") > 0)
+end)
+
+-- Think cannot read GetCurrentCommand. Store buttons from the usercmd.
+hook.Add("StartCommand","HG Fake Buttons",function(ply,cmd)
+    if not IsValid(ply) or not cmd then return end
+    ply.hgFakeButtons = cmd:GetButtons() or 0
+    ply.hgFakeFwd = cmd:GetForwardMove() or 0
+    ply.hgFakeSide = cmd:GetSideMove() or 0
+    ply.hgFakeAttack = cmd:KeyDown(IN_ATTACK)
+    ply.hgFakeAttack2 = cmd:KeyDown(IN_ATTACK2)
+
+    if ply:Alive() and (ply:GetNWBool("fake") or ply:GetNWBool("Fake") or ply.Fake) then
+        if cmd:KeyDown(IN_DUCK) then
+            cmd:RemoveKey(IN_DUCK)
+        end
+
+        local wep = ply:GetActiveWeapon()
+        local isGun = IsValid(wep) and wep:GetClass() ~= "weapon_hands" and ((string.sub(wep:GetClass(), 1, 4) == "wep_") or wep.IsFireWeapon or wep.IsHomigradWeapon)
+
+        if isGun then
+            -- Gun in fake is held in one hand: aiming (IN_ATTACK2 / ADS / scope) is strictly disabled
+            if cmd:KeyDown(IN_ATTACK2) then
+                cmd:RemoveKey(IN_ATTACK2)
+            end
+
+            -- Manual weapon fire invocation since MOVETYPE_NONE suppresses engine ItemPostFrame
+            if not ply.Otrub and not ply:GetNW2Bool("Otrub", false) and not ply:GetNWBool("isDead", false) and ply:Health() > 0 then
+                if cmd:KeyDown(IN_ATTACK) then
+                    local auto = wep.Primary and wep.Primary.Automatic
+                    local canShoot = auto or not ply.hgFakeWasAttacking
+                    ply.hgFakeWasAttacking = true
+
+                    if canShoot and (wep.NextShot or 0) <= CurTime() and (wep:GetNextPrimaryFire() or 0) <= CurTime() then
+                        if wep.PrimaryAttack then
+                            wep:PrimaryAttack()
+                        end
+                    end
+                else
+                    ply.hgFakeWasAttacking = false
+                end
+
+                if cmd:KeyDown(IN_RELOAD) and wep.Reload and (wep.NextShot or 0) <= CurTime() then
+                    wep:Reload()
+                end
+            end
+        end
+    end
+end)
+
+local function isFiniteVec(v)
+    return isvector(v) and v[1] == v[1] and v[2] == v[2] and v[3] == v[3]
+        and math.abs(v[1]) < 50000 and math.abs(v[2]) < 50000 and math.abs(v[3]) < 50000
+end
+
+-- Original Homigrad FakeControl. Inputs come from StartCommand because
+-- MOVETYPE_NONE does not update KeyDown the way Homigrad's observer fake does.
+local function keyHeld(ply,btn)
+    if btn == IN_ATTACK and ply.hgFakeAttack then return true end
+    if btn == IN_ATTACK2 and ply.hgFakeAttack2 then return true end
+    local btns = tonumber(ply.hgFakeButtons) or 0
+    if bit.band(btns,btn) ~= 0 then return true end
+    return ply:KeyDown(btn)
+end
+
+local function shadowCtrl(phys,tab)
+    if not IsValid(phys) or not istable(tab) or not isFiniteVec(tab.pos) then return end
+    if phys.hgWorldPinned then return end
+    phys:Wake()
+    phys:EnableMotion(true)
+    phys:EnableGravity(true)
+    phys:EnableDrag(false)
+    if tab.dampfactor == nil then tab.dampfactor = 1 end
+    phys:ComputeShadowControl(tab)
+end
+
+local function ragSupported(rag,phys)
+    if not IsValid(rag) then return false end
+
+    local pts = {rag:GetPos()}
+    if IsValid(phys) then pts[#pts + 1] = phys:GetPos() end
+
+    for i = 1,#pts do
+        local origin = pts[i]
+        if not isFiniteVec(origin) then continue end
+
+        local tr = util.TraceLine({
+            start = origin,
+            endpos = origin - Vector(0,0,16),
+            filter = rag,
+            mask = MASK_SOLID,
+        })
+        if tr.Hit and not tr.HitSky and tr.HitNormal.z > 0.45 then
+            return true
+        end
+    end
+
+    return false
+end
+
+local zeroAng = Angle(0,0,0)
+
+local function dumpHeadAng(eye)
+    local angs = Angle(eye)
+    angs:RotateAroundAxis(angs:Forward(),90)
+    return angs
+end
+
+local function dumpBodyAng(eye)
+    return Angle(eye.p - 90,eye.y,eye.r - 90)
+end
+
+local function dumpHandAng(eye)
+    local angs = Angle(eye)
+    angs:RotateAroundAxis(angs:Forward(),90)
+    angs:RotateAroundAxis(angs:Right(),-90)
+    return angs
+end
+
+local sitPoseBones = {
+    {"ValveBiped.Bip01_L_Thigh",Angle(0,-45,0)},
+    {"ValveBiped.Bip01_L_Calf",Angle(0,110,0)},
+    {"ValveBiped.Bip01_R_Thigh",Angle(0,-45,0)},
+    {"ValveBiped.Bip01_R_Calf",Angle(0,110,0)},
+}
+
+local function applySitPose(rag,holdLMB,holdRMB)
+    for i = 1,#sitPoseBones do
+        local id = rag:LookupBone(sitPoseBones[i][1])
+        if id and id >= 0 then rag:ManipulateBoneAngles(id,sitPoseBones[i][2]) end
+    end
+    local lu = rag:LookupBone("ValveBiped.Bip01_L_UpperArm")
+    local lf = rag:LookupBone("ValveBiped.Bip01_L_Forearm")
+    local ru = rag:LookupBone("ValveBiped.Bip01_R_UpperArm")
+    local rf = rag:LookupBone("ValveBiped.Bip01_R_Forearm")
+    if lu and lu >= 0 then rag:ManipulateBoneAngles(lu,holdLMB and zeroAng or Angle(0,-90,0)) end
+    if lf and lf >= 0 then rag:ManipulateBoneAngles(lf,zeroAng) end
+    if ru and ru >= 0 then rag:ManipulateBoneAngles(ru,holdRMB and zeroAng or Angle(0,90,0)) end
+    if rf and rf >= 0 then rag:ManipulateBoneAngles(rf,zeroAng) end
+    local spine = rag:LookupBone("ValveBiped.Bip01_Spine")
+    local spine1 = rag:LookupBone("ValveBiped.Bip01_Spine1")
+    if spine and spine >= 0 then rag:ManipulateBoneAngles(spine,zeroAng) end
+    if spine1 and spine1 >= 0 then rag:ManipulateBoneAngles(spine1,zeroAng) end
+    rag.customPoseApplied = true
+end
+
+local function resetSitPose(rag)
+    if not rag.customPoseApplied then return end
+    local names = {
+        "ValveBiped.Bip01_L_UpperArm","ValveBiped.Bip01_L_Forearm",
+        "ValveBiped.Bip01_R_UpperArm","ValveBiped.Bip01_R_Forearm",
+        "ValveBiped.Bip01_L_Thigh","ValveBiped.Bip01_L_Calf",
+        "ValveBiped.Bip01_R_Thigh","ValveBiped.Bip01_R_Calf",
+        "ValveBiped.Bip01_Spine","ValveBiped.Bip01_Spine1",
+    }
+    for i = 1,#names do
+        local id = rag:LookupBone(names[i])
+        if id and id >= 0 then rag:ManipulateBoneAngles(id,zeroAng) end
+    end
+    rag.customPoseApplied = nil
+end
+
+local function clientOptOn(ply,name,defaultOn)
+    if not ply.GetInfo then return defaultOn end
+    local s = ply:GetInfo(name)
+    if s == nil or s == "" then return defaultOn end
+    return s ~= "0"
+end
+
+local function isGrabbed(cons)
+    if istable(cons) and cons.worldPin then return IsValid(cons.phys) end
+    return IsValid(cons)
+end
+
+local function clearGrab(cons)
+    if istable(cons) and cons.worldPin then
+        if IsValid(cons.phys) then
+            cons.phys.hgWorldPinned = nil
+            cons.phys:EnableMotion(true)
+            cons.phys:Wake()
+        end
+        return
+    end
+    if IsValid(cons) then cons:Remove() end
+end
+
+local function grabIsAnchored(cons)
+    if istable(cons) and cons.worldPin then return IsValid(cons.phys) end
+    if not IsValid(cons) then return false end
+
+    local ent2 = cons.Ent2 or cons.ent2
+    if not IsValid(ent2) or (ent2.IsWorld and ent2:IsWorld()) then return true end
+
+    local ok,vel = pcall(ent2.GetVelocity,ent2)
+    if not ok or not isvector(vel) then return true end
+    return vel:LengthSqr() < 900
+end
+
+local function physObjIndex(rag,phys)
+    if not IsValid(rag) or not IsValid(phys) then return nil end
+    for i = 0,rag:GetPhysicsObjectCount() - 1 do
+        if rag:GetPhysicsObjectNum(i) == phys then return i end
+    end
+end
+
+local function tryHandGrab(rag,ply,phys,handPhysBone)
+    if not IsValid(phys) or handPhysBone == nil or handPhysBone < 0 then return nil end
+
+    local angs = phys:GetAngles()
+    local origin = phys:GetPos()
+    local look = ply:EyeAngles():Forward()
+    local dirs = {
+        angs:Up() * 14,
+        angs:Right() * 12,
+        angs:Right() * -12,
+        angs:Forward() * 12,
+        angs:Forward() * -10,
+        look * 22,
+        look * 16 + Vector(0,0,10),
+        look * 12 + ply:EyeAngles():Up() * 14,
+        Vector(0,0,12),
+        Vector(0,0,-10),
+    }
+
+    for i = 1,#dirs do
+        local tr = util.TraceLine({
+            start = origin,
+            endpos = origin + dirs[i],
+            filter = {rag,ply},
+            mask = MASK_SOLID,
+        })
+        if not tr.Hit or tr.HitSky then continue end
+
+        local hitEnt = tr.Entity
+        if hitEnt == rag or hitEnt == ply then continue end
+        if IsValid(hitEnt) and hitEnt:IsPlayer() and not hitEnt.Fake then
+            if Faking then Faking(hitEnt) elseif hitEnt.EnterFake then hitEnt:EnterFake() end
+        end
+        -- Bumping a weapon with a fake hand must not arm you: in fake the body is a
+        -- physics ragdoll, and taking a gun while you are a corpse on the floor both
+        -- looks wrong and hands out a free weapon. Nothing is picked up in fake.
+        if IsValid(hitEnt) and hitEnt:IsWeapon() then return nil end
+
+        local cons
+        if not IsValid(hitEnt) or hitEnt:IsWorld() then
+            cons = constraint.Weld(rag,game.GetWorld(),handPhysBone,0,0,false,false)
+            if not IsValid(cons) then
+                phys.hgWorldPinned = true
+                phys:EnableMotion(false)
+                phys:SetVelocity(vector_origin)
+                return {worldPin = true,phys = phys}
+            end
+        else
+            cons = constraint.Weld(rag,hitEnt,handPhysBone,tr.PhysicsBone or 0,0,false,false)
+        end
+
+        if IsValid(cons) then return cons end
+    end
+end
+
+hook.Add("Think","HG Fake Movement",function()
+    for ply,rag in pairs(fakePlayers) do
+        if not IsValid(ply) then
+            fakePlayers[ply] = nil
+            if IsValid(rag) then rag:Remove() end
+            continue
+        end
+
+        if not IsValid(rag) then
+            fakePlayers[ply] = nil
+            if ply.hgFakeRagdoll == rag then ply.hgFakeRagdoll = nil end
+            SetFakeState(ply)
+            continue
+        end
+
+        -- Keep the death ragdoll until spawn. Dead players stay limp with no controls.
+        if not ply:Alive() or ply.isDead or ply:GetNWBool("isDead",false) or ply:GetNWBool("FakeDeath",false) or ply:Health() <= 0 then
+            if rag.ZacConsLH then clearGrab(rag.ZacConsLH) rag.ZacConsLH = nil end
+            if rag.ZacConsRH then clearGrab(rag.ZacConsRH) rag.ZacConsRH = nil end
+            ply:SetNWBool("LeftArm",false)
+            ply:SetNWBool("RightArm",false)
+            local activeWep = ply:GetActiveWeapon()
+            if IsValid(activeWep) and activeWep:GetClass() ~= "weapon_hands" and ply:HasWeapon("weapon_hands") then
+                ply:SelectWeapon("weapon_hands")
+            end
+            ply:SetPos(rag:GetPos())
+            ply:SetLocalVelocity(vector_origin)
+            continue
+        end
+
+        local phys = rag:GetPhysicsObjectNum(0)
+        if not IsValid(phys) then continue end
+
+        -- Unconscious ragdoll stays limp.
+        if ply.Otrub or ply:GetNW2Bool("Otrub",false) then
+            ply:SetPos(rag:GetPos())
+            ply:SetLocalVelocity(vector_origin)
+            continue
+        end
+
+        -- Get bone physics objects (with fallback for different model skeletons)
+        local Head = resolvePhysBone(rag,"Head")
+        local Neck = resolvePhysBone(rag,"Neck")
+        local Spine4 = resolvePhysBone(rag,"Spine4")
+        local Spine2 = resolvePhysBone(rag,"Spine2")
+        local Spine1 = resolvePhysBone(rag,"Spine1")
+        local Spine = resolvePhysBone(rag,"Spine")
+        local Pelvis = resolvePhysBone(rag,"Pelvis")
+        local CalfR = resolvePhysBone(rag,"CalfR")
+        local CalfL = resolvePhysBone(rag,"CalfL")
+        local ThighR = resolvePhysBone(rag,"ThighR")
+        local ThighL = resolvePhysBone(rag,"ThighL")
+        local UArmL = resolvePhysBone(rag,"UArmL")
+        local UArmR = resolvePhysBone(rag,"UArmR")
+        local FArmL = resolvePhysBone(rag,"FArmL")
+        local FArmR = resolvePhysBone(rag,"FArmR")
+        local HandL = resolvePhysBone(rag,"HandL") or FArmL
+        local HandR = resolvePhysBone(rag,"HandR") or FArmR
+
+        Head = Head or Spine4 or Spine2 or Pelvis or phys
+        Spine4 = Spine4 or Spine2 or Head
+        Spine2 = Spine2 or Spine4 or Head
+        Spine1 = Spine1 or Spine2
+        Pelvis = Pelvis or Spine1 or Spine2 or phys
+
+        if (rag.FakeSpawnTime or 0) + 0.08 > CurTime() then
+            ply:SetPos(rag:GetPos())
+            ply:SetLocalVelocity(vector_origin)
+            continue
+        end
+
+        local down = function(btn) return keyHeld(ply,btn) end
+        local grabbedL = isGrabbed(rag.ZacConsLH)
+        local grabbedR = isGrabbed(rag.ZacConsRH)
+        local dt = math.max(FrameTime(),engine.TickInterval(),0.001)
+        local eye = ply:EyeAngles()
+        local fwd = eye:Forward()
+        local headPos = Head:GetPos()
+        if not isFiniteVec(headPos) then continue end
+
+        local alwaysE = ply.hgRagAlwaysE
+        if alwaysE == nil then alwaysE = clientOptOn(ply,"hg_ragdoll_always_e",false) end
+        local caveSpine = ply.hgRagCaveSpine
+        if caveSpine == nil then caveSpine = clientOptOn(ply,"hg_ragdoll_cave_spine",false) end
+
+        -- Dump Homigrad: E is angular-only (maxspeed 0). Sit pose is bone angles.
+        local poseSpine = down(IN_USE) or alwaysE
+        local holdLMB = down(IN_ATTACK)
+        local holdRMB = down(IN_ATTACK2)
+        local headAng = dumpHeadAng(eye)
+        local bodyAng = dumpBodyAng(eye)
+        if caveSpine then
+            local flat = Angle(math.Clamp(eye.p,-12,28),eye.y,eye.r)
+            headAng = dumpHeadAng(flat)
+            bodyAng = dumpBodyAng(flat)
+        end
+        local hans = dumpHandAng(eye)
+
+        if rag.SetFlexWeight then rag:SetFlexWeight(9,0) end
+
+        local wep = ply:GetActiveWeapon()
+        local hasGun = IsValid(wep) and wep:GetClass() ~= "weapon_hands" and ((string.sub(wep:GetClass(), 1, 4) == "wep_") or wep.IsFireWeapon or wep.IsHomigradWeapon)
+        if hasGun and grabbedR then
+            clearGrab(rag.ZacConsRH)
+            rag.ZacConsRH = nil
+            grabbedR = false
+        end
+
+        local fwdInput = 0
+        if down(IN_FORWARD) or (tonumber(ply.hgFakeFwd) or 0) > 10 then fwdInput = fwdInput + 1 end
+        if down(IN_BACK) or (tonumber(ply.hgFakeFwd) or 0) < -10 then fwdInput = fwdInput - 1 end
+
+        local sideInput = 0
+        if down(IN_MOVERIGHT) or (tonumber(ply.hgFakeSide) or 0) > 10 then sideInput = sideInput + 1 end
+        if down(IN_MOVELEFT) or (tonumber(ply.hgFakeSide) or 0) < -10 then sideInput = sideInput - 1 end
+
+        local wantsMove = (fwdInput ~= 0 or sideInput ~= 0)
+        local climbing = (fwdInput > 0)
+            and ((grabbedL and grabIsAnchored(rag.ZacConsLH)) or (grabbedR and grabIsAnchored(rag.ZacConsRH)))
+        local isCrawling = wantsMove and not climbing and not ply.brokenspine
+
+        if poseSpine and not ply.brokenspine and not climbing and not isCrawling then
+            -- Homigrad computeuse: head stays where it is, body is angular-only (maxspeed 0).
+            -- Skip all of this while climbing or crawling so the body moves naturally.
+            shadowCtrl(Head,{
+                secondstoarrive = 0.1,
+                pos = Head:GetPos(),
+                angle = headAng,
+                maxangular = 2500,
+                maxangulardamp = 200,
+                maxspeeddamp = 30,
+                maxspeed = 0,
+                teleportdistance = 0,
+                deltatime = dt,
+            })
+            local function bodyShadow()
+                return {
+                    secondstoarrive = 0.1,
+                    pos = vector_origin,
+                    angle = bodyAng,
+                    maxangular = 3500,
+                    maxangulardamp = 250,
+                    maxspeeddamp = 0,
+                    maxspeed = 0,
+                    teleportdistance = 0,
+                    deltatime = dt,
+                }
+            end
+            shadowCtrl(Spine4,bodyShadow())
+            shadowCtrl(Spine2,bodyShadow())
+            if IsValid(Pelvis) then shadowCtrl(Pelvis,bodyShadow()) end
+            applySitPose(rag,holdLMB,holdRMB)
+        else
+            resetSitPose(rag)
+        end
+
+        local function pullToHand(hand,climb)
+            if not IsValid(hand) or not IsValid(Spine2) then return end
+
+            local chestPos = Spine2:GetPos()
+            local handPos = hand:GetPos()
+            local toHand = handPos - chestPos
+            local dist = toHand:Length()
+
+            local dest
+            if climb then
+                -- Pull smoothly towards hand, stopping before overshooting or pulling past it
+                if dist > 14 then
+                    dest = chestPos + toHand:GetNormalized() * math.min(dist - 12, 14) + Vector(0, 0, 4)
+                else
+                    dest = chestPos + Vector(0, 0, 2)
+                end
+            else
+                dest = (IsValid(Pelvis) and Pelvis:GetPos()) or chestPos
+            end
+            if not isFiniteVec(dest) then return end
+
+            local tab = {
+                secondstoarrive = 0.45,
+                pos = dest,
+                angle = Spine2:GetAngles(),
+                maxangular = 40,
+                maxangulardamp = 25,
+                maxspeeddamp = 25,
+                maxspeed = 45,
+                dampfactor = 1,
+                teleportdistance = 0,
+                deltatime = dt,
+            }
+            shadowCtrl(Spine2,tab)
+
+            -- Keep torso upright/aligned to prevent twisting
+            local angVel = Spine2:GetAngleVelocity()
+            Spine2:AddAngleVelocity(-angVel * 0.75)
+
+            if IsValid(Spine4) then
+                local s4AngVel = Spine4:GetAngleVelocity()
+                Spine4:AddAngleVelocity(-s4AngVel * 0.75)
+            end
+
+            if IsValid(Pelvis) then
+                local pAngVel = Pelvis:GetAngleVelocity()
+                Pelvis:AddAngleVelocity(-pAngVel * 0.75)
+            end
+        end
+
+        if climbing then
+            local leftOK = grabbedL and grabIsAnchored(rag.ZacConsLH) and IsValid(HandL)
+            local rightOK = grabbedR and grabIsAnchored(rag.ZacConsRH) and IsValid(HandR)
+            if leftOK and rightOK then
+                local avgHand = (HandL:GetPos() + HandR:GetPos()) * 0.5
+                local chestPos = Spine2:GetPos()
+                local toAvg = avgHand - chestPos
+                local dist = toAvg:Length()
+                local dest
+                if dist > 14 then
+                    dest = chestPos + toAvg:GetNormalized() * math.min(dist - 12, 16) + Vector(0, 0, 4)
+                else
+                    dest = chestPos + Vector(0, 0, 2)
+                end
+
+                if isFiniteVec(dest) and IsValid(Spine2) then
+                    shadowCtrl(Spine2,{
+                        secondstoarrive = 0.45,
+                        pos = dest,
+                        angle = Spine2:GetAngles(),
+                        maxangular = 45,
+                        maxangulardamp = 25,
+                        maxspeeddamp = 25,
+                        maxspeed = 50,
+                        dampfactor = 1,
+                        teleportdistance = 0,
+                        deltatime = dt,
+                    })
+                    local angVel = Spine2:GetAngleVelocity()
+                    Spine2:AddAngleVelocity(-angVel * 0.8)
+                    if IsValid(Pelvis) then
+                        local pAngVel = Pelvis:GetAngleVelocity()
+                        Pelvis:AddAngleVelocity(-pAngVel * 0.8)
+                    end
+                    if IsValid(Spine4) then
+                        local s4AngVel = Spine4:GetAngleVelocity()
+                        Spine4:AddAngleVelocity(-s4AngVel * 0.8)
+                    end
+                end
+            elseif leftOK then
+                pullToHand(HandL,true)
+            elseif rightOK then
+                pullToHand(HandR,true)
+            end
+        elseif isCrawling then
+            -- Full crawling physics: drives the body across ground/floors with limb movement
+            local planarFwd = Vector(fwd.x, fwd.y, 0)
+            if planarFwd:LengthSqr() > 0.001 then planarFwd:Normalize() else planarFwd = Vector(1,0,0) end
+            local planarRight = Vector(eye:Right().x, eye:Right().y, 0)
+            if planarRight:LengthSqr() > 0.001 then planarRight:Normalize() else planarRight = Vector(0,1,0) end
+
+            local crawlDir = (planarFwd * fwdInput + planarRight * sideInput)
+            if crawlDir:LengthSqr() > 0.001 then crawlDir:Normalize() end
+
+            local groundTr = util.TraceLine({
+                start = Spine2:GetPos() + Vector(0,0,12),
+                endpos = Spine2:GetPos() - Vector(0,0,32),
+                filter = {rag, ply},
+                mask = MASK_SOLID
+            })
+            local onGround = groundTr.Hit and not groundTr.HitSky
+
+            if onGround then
+                local targetSpeed = (fwdInput > 0) and 35 or 25
+                local curVel = Spine2:GetVelocity()
+                local planarVel = Vector(curVel.x, curVel.y, 0)
+                local curSpeedInDir = planarVel:Dot(crawlDir)
+
+                if curSpeedInDir < targetSpeed then
+                    local forceMag = math.Clamp((targetSpeed - curSpeedInDir) * 18, 0, 320)
+                    local forceVec = crawlDir * forceMag
+                    Spine2:ApplyForceCenter(forceVec * 0.4)
+                    if IsValid(Spine4) then Spine4:ApplyForceCenter(forceVec * 0.3) end
+                    if IsValid(Pelvis) then Pelvis:ApplyForceCenter(forceVec * 0.3) end
+                end
+
+                -- Active anti-twist: damp roll, pitch and yaw spinning while crawling
+                local angVel = Spine2:GetAngleVelocity()
+                Spine2:AddAngleVelocity(-angVel * 0.8)
+                if IsValid(Spine4) then
+                    local s4AngVel = Spine4:GetAngleVelocity()
+                    Spine4:AddAngleVelocity(-s4AngVel * 0.8)
+                end
+                if IsValid(Pelvis) then
+                    local pAngVel = Pelvis:GetAngleVelocity()
+                    Pelvis:AddAngleVelocity(-pAngVel * 0.8)
+                end
+
+                if (rag.hgNextCrawlSound or 0) <= CurTime() and curSpeedInDir > 8 then
+                    rag.hgNextCrawlSound = CurTime() + 0.5
+                    rag:EmitSound("physics/body/body_medium_scrape" .. math.random(1, 3) .. ".wav", 60, math.random(95, 105), 0.35)
+                end
+
+                rag.hgCrawlCycle = (rag.hgCrawlCycle or 0) + dt * 4.0
+                local leftPhase = math.sin(rag.hgCrawlCycle)
+                local rightPhase = -leftPhase
+                if curSpeedInDir > 4 then
+                    if IsValid(CalfL) then CalfL:ApplyForceCenter(-crawlDir * (math.max(leftPhase, 0) * 8)) end
+                    if IsValid(CalfR) then CalfR:ApplyForceCenter(-crawlDir * (math.max(rightPhase, 0) * 8)) end
+                end
+
+                -- Natural crawl arm placement: keep hands level with ground, no collision clipping
+                local handHeight = math.max(groundTr.HitPos.z + 4, Spine2:GetPos().z - 6)
+                if not grabbedL and IsValid(HandL) then
+                    local handPos = Vector(headPos.x, headPos.y, handHeight) + crawlDir * (14 + leftPhase * 6) + eye:Right() * -10
+                    shadowCtrl(HandL, {
+                        secondstoarrive = 0.22,
+                        pos = handPos,
+                        angle = hans,
+                        maxangular = 25,
+                        maxangulardamp = 15,
+                        maxspeeddamp = 15,
+                        maxspeed = 30,
+                        teleportdistance = 0,
+                        deltatime = dt,
+                    })
+                end
+
+                if not hasGun and not grabbedR and IsValid(HandR) then
+                    local handPos = Vector(headPos.x, headPos.y, handHeight) + crawlDir * (14 + rightPhase * 6) + eye:Right() * 10
+                    shadowCtrl(HandR, {
+                        secondstoarrive = 0.22,
+                        pos = handPos,
+                        angle = hans,
+                        maxangular = 25,
+                        maxangulardamp = 15,
+                        maxspeeddamp = 15,
+                        maxspeed = 30,
+                        teleportdistance = 0,
+                        deltatime = dt,
+                    })
+                end
+            end
+        elseif down(IN_BACK) or (tonumber(ply.hgFakeFwd) or 0) < -10 then
+            if grabbedL and grabIsAnchored(rag.ZacConsLH) then pullToHand(HandL,false) end
+            if grabbedR and grabIsAnchored(rag.ZacConsRH) then pullToHand(HandR,false) end
+        end
+
+        -- Weapon in fake: held strictly in ONE hand (right hand), aiming / ADS disabled
+        if hasGun and IsValid(HandR) then
+            local gunAimPos = headPos + fwd * 24 + eye:Right() * 8 + eye:Up() * -2
+            local lookUp = math.Clamp(-eye.p, -45, 60)
+            gunAimPos.z = math.Clamp(gunAimPos.z, headPos.z - 14, headPos.z + 14 + lookUp * 0.25)
+            shadowCtrl(HandR, {
+                secondstoarrive = 0.18,
+                pos = gunAimPos,
+                angle = hans,
+                maxangular = 450,
+                maxangulardamp = 60,
+                maxspeeddamp = 25,
+                maxspeed = 65,
+                teleportdistance = 0,
+                deltatime = dt,
+            })
+            if IsValid(FArmR) then
+                shadowCtrl(FArmR, {
+                    secondstoarrive = 0.2,
+                    pos = (Spine4:GetPos() + gunAimPos) * 0.5 + eye:Right() * 4,
+                    angle = hans,
+                    maxangular = 300,
+                    maxangulardamp = 50,
+                    maxspeeddamp = 20,
+                    maxspeed = 55,
+                    teleportdistance = 0,
+                    deltatime = dt,
+                })
+            end
+        end
+
+        -- Reach along look so you can grab a ledge above the head.
+        local function reachHand(hand,side)
+            if not IsValid(hand) then return end
+            -- Realistic arm reach: ~22 units from chest, within natural human joint limits
+            local chestPos = (IsValid(Spine4) and Spine4:GetPos()) or headPos
+            local dest = chestPos + fwd * 22 + eye:Right() * (side * 0.8) + eye:Up() * 2
+            local lookUp = math.Clamp(-eye.p, 0, 80)
+            dest.z = math.Clamp(dest.z, chestPos.z - 16, chestPos.z + 16 + lookUp * 0.35)
+            shadowCtrl(hand,{
+                secondstoarrive = 0.2,
+                pos = dest,
+                angle = hans,
+                maxangular = 180,
+                maxangulardamp = 40,
+                maxspeeddamp = 20,
+                maxspeed = 45,
+                teleportdistance = 0,
+                deltatime = dt,
+            })
+            -- Smooth helper for forearm so elbows don't stretch
+            local farm = (side < 0 and FArmL) or FArmR
+            if IsValid(farm) then
+                shadowCtrl(farm, {
+                    secondstoarrive = 0.22,
+                    pos = (chestPos + dest) * 0.5 + eye:Right() * (side * 0.4),
+                    angle = hans,
+                    maxangular = 120,
+                    maxangulardamp = 30,
+                    maxspeeddamp = 20,
+                    maxspeed = 40,
+                    teleportdistance = 0,
+                    deltatime = dt,
+                })
+            end
+        end
+
+        if hasGun then
+            -- When holding a gun in right hand, RMB reaches with the free left hand (no ADS)
+            if holdRMB and not grabbedL then reachHand(HandL,-11) end
+        else
+            if holdLMB and not grabbedL then reachHand(HandL,-11) end
+            if holdRMB and not grabbedR then reachHand(HandR,11) end
+        end
+
+        if down(IN_SPEED) then
+            local handPhys = resolvePhysBone(rag,"HandL") or HandL
+            if IsValid(handPhys) and not grabbedL and (not rag.ZacNextGrLH or rag.ZacNextGrLH <= CurTime()) then
+                rag.ZacNextGrLH = CurTime() + 0.01
+                local handPhysBone = physObjIndex(rag,handPhys)
+                if handPhysBone ~= nil then
+                    local ok,cons = pcall(tryHandGrab,rag,ply,handPhys,handPhysBone)
+                    if ok and cons then rag.ZacConsLH = cons end
+                end
+            end
+        elseif grabbedL then
+            clearGrab(rag.ZacConsLH)
+            rag.ZacConsLH = nil
+        end
+
+        if down(IN_WALK) then
+            local handPhys = resolvePhysBone(rag,"HandR") or HandR
+            if IsValid(handPhys) and not grabbedR and (not rag.ZacNextGrRH or rag.ZacNextGrRH <= CurTime()) then
+                rag.ZacNextGrRH = CurTime() + 0.01
+                local handPhysBone = physObjIndex(rag,handPhys)
+                if handPhysBone ~= nil then
+                    local ok,cons = pcall(tryHandGrab,rag,ply,handPhys,handPhysBone)
+                    if ok and cons then rag.ZacConsRH = cons end
+                end
+            end
+        elseif grabbedR then
+            clearGrab(rag.ZacConsRH)
+            rag.ZacConsRH = nil
+        end
+
+        local pinL = istable(rag.ZacConsLH) and rag.ZacConsLH.phys
+        local pinR = istable(rag.ZacConsRH) and rag.ZacConsRH.phys
+        for i = 0,rag:GetPhysicsObjectCount() - 1 do
+            local p = rag:GetPhysicsObjectNum(i)
+            if not IsValid(p) or p == pinL or p == pinR then continue end
+            p:EnableGravity(true)
+            p:EnableDrag(true)
+            p:SetDamping(0.8, 3.5)
+        end
+
+        ply:SetNWBool("LeftArm",isGrabbed(rag.ZacConsLH))
+        ply:SetNWBool("RightArm",isGrabbed(rag.ZacConsRH))
+
+        ply:SetPos(rag:GetPos())
+        ply:SetLocalVelocity(vector_origin)
+    end
+end)
+
+local function RemoveFake(ply)
+    if not IsValid(ply) then return end
+
+    local rag = fakePlayers[ply] or ply.hgFakeRagdoll
+    fakePlayers[ply] = nil
+    ply.hgFakeRagdoll = nil
+
+    if IsValid(rag) then
+        clearGrab(rag.ZacConsLH)
+        clearGrab(rag.ZacConsRH)
+        rag.ZacConsLH,rag.ZacConsRH = nil,nil
+        rag:RemoveCallOnRemove("HG_FakeOwner")
+
+        local keepCorpse = rag.hgIsDeathCorpse or (not ply:Alive()) or ply:GetNWBool("FakeDeath") or ply.isDead or (ply:Health() <= 0)
+        if keepCorpse then
+            rag.hgIsDeathCorpse = true
+            rag:SetNWBool("hgDeathCorpse",true)
+            rag:SetNWString("Nick",ply:Nick())
+            rag:SetNWString("PlayerName",ply:Nick())
+            if rag.SetController then rag:SetController(nil) end
+            rag:SetNWEntity("RagdollController",NULL)
+            rag:CallOnRemove("HG Corpse Loot Drop",function(ent)
+                if inventoryGame and inventoryGame.DropEntityLoot then
+                    inventoryGame.DropEntityLoot(ent)
+                end
+            end)
+            SetFakeState(ply)
+            ply:SetNWEntity("DeathRagdoll",rag)
+            if ply:Alive() and not ply.isDead and ply:Health() > 0 then
+                ply:SetNWBool("FakeDeath",false)
+            end
+            return
+        end
+
+        rag:Remove()
+    end
+
+    SetFakeState(ply)
+    if ply:Alive() and not ply.isDead and ply:Health() > 0 then
+        ply:SetNWBool("FakeDeath",false)
+    end
+end
+
+-- Nothing is picked up in fake. The engine's own paths (+use on a weapon, prop pickup,
+-- physgun use) all fire from wherever the player entity stands, which while faking is the
+-- ragdoll's origin -- so they keep working on a body that is supposed to be a limp
+-- corpse. Block them centrally here; weapon_hands additionally goes quiet (see its
+-- InFakeNoHands guard).
+local function InFake(ply)
+	return IsValid(ply) and ply.InFake and ply:InFake()
+end
+
+hook.Add("PlayerCanPickupWeapon","HG Fake",function(ply,wep)
+	if InFake(ply) then return false end
+end)
+
+hook.Add("PlayerUse","HG Fake",function(ply,ent)
+	if InFake(ply) then return false end
+end)
+
+hook.Add("AllowPlayerPickup","HG Fake",function(ply,ent)
+	if InFake(ply) then return false end
+end)
+
+local function disableGModCorpse()
+    if GAMEMODE then
+        GAMEMODE.DoPlayerDeath = function(self,ply,att,dmginfo)
+            ply.isDead = true
+            ply.pulse = 0
+            ply:SetNWFloat("pulse",0)
+            ply.heartstop = true
+            ply:SetNWBool("heartstop",true)
+            ply:SetNWBool("isDead",true)
+            ply:SetNWBool("Alive",false)
+            ply:SetNWBool("FakeDeath",true)
+            ply:AddDeaths(1)
+            if IsValid(att) and att:IsPlayer() then
+                if att == ply then
+                    att:AddFrags(-1)
+                else
+                    att:AddFrags(1)
+                end
+            end
+        end
+    end
+end
+hook.Add("Initialize","HG Disable GMod Corpse",disableGModCorpse)
+hook.Add("PostGamemodeLoaded","HG Disable GMod Corpse",disableGModCorpse)
+if GAMEMODE then disableGModCorpse() end
+
+hook.Add("PlayerSpawn","HG Fake Reset",function(ply)
+    ply.isDead = nil
+    ply.heartstop = nil
+    ply:SetNWBool("heartstop",false)
+    ply:SetNWBool("isDead",false)
+    ply:SetNWBool("Alive",true)
+    ply:SetNWBool("FakeDeath",false)
+    RemoveFake(ply)
+end)
+
+hook.Add("DoPlayerDeath","HG Fake Death",function(ply,att,dmginfo)
+    ply.isDead = true
+    ply.pulse = 0
+    ply:SetNWFloat("pulse",0)
+    ply.heartstop = true
+    ply:SetNWBool("heartstop",true)
+    ply:SetNWBool("isDead",true)
+    ply:SetNWBool("Alive",false)
+    ply:SetNWBool("FakeDeath",true)
+
+    -- Remove any GMod engine ragdoll immediately (prevents duplicate 2nd corpse)
+    local engRag = ply:GetRagdollEntity()
+    if IsValid(engRag) then engRag:Remove() end
+
+    if not ply:InFake() then
+        ply.hgAllowDeadFake = true
+        ply:EnterFake()
+        ply.hgAllowDeadFake = nil
+    end
+
+    local rag = ply:GetDummy() or ply.hgFakeRagdoll or ply.FakeRagdoll
+    if IsValid(rag) then
+        rag.hgIsDeathCorpse = true
+        rag:SetNWBool("hgDeathCorpse",true)
+        rag.pulse = 0
+        rag:SetNWFloat("pulse",0)
+        rag.heartstop = true
+        rag:SetNWBool("heartstop",true)
+        if ply.HeadPop or ply:GetNWBool("HeadPop",false) then
+            rag:SetNWBool("HeadExploded",true)
+        end
+        rag:SetNWString("Nick",ply:Nick())
+        rag:SetNWString("PlayerName",ply:Nick())
+        if rag.SetController then rag:SetController(nil) end
+        rag:SetNWEntity("RagdollController",NULL)
+        clearGrab(rag.ZacConsLH)
+        clearGrab(rag.ZacConsRH)
+        rag.ZacConsLH,rag.ZacConsRH = nil,nil
+        ply:SetNWEntity("DeathRagdoll",rag)
+    end
+
+    fakePlayers[ply] = nil
+
+    timer.Simple(0,function()
+        if IsValid(ply) then
+            local rag2 = ply:GetRagdollEntity()
+            if IsValid(rag2) then rag2:Remove() end
+        end
+    end)
+end)
+hook.Add("PlayerDisconnected","HG Fake Disconnect",RemoveFake)
+
+-- Bullets / explosions hitting the fake ragdoll must hurt the player.
+-- Engine crush is ignored here: fall damage comes from PhysicsCollide above.
+hook.Add("EntityTakeDamage","HG Fake Ragdoll Damage",function(ent,dmginfo)
+    if not IsValid(ent) or not dmginfo then return end
+    if dmginfo:IsDamageType(DMG_CRUSH) or dmginfo:IsDamageType(DMG_FALL) then return end
+
+    local ply = (hg and hg.RagdollOwner and hg.RagdollOwner(ent)) or (RagdollOwner and RagdollOwner(ent))
+    local isDeadCorpse = not IsValid(ply) or ply == ent or not ply:Alive() or ply.isDead or ply:GetNWBool("isDead", false) or ply:Health() <= 0
+    if isDeadCorpse then
+        if not ent:GetNWBool("HeadExploded", false) then
+            local isHead = false
+            if HG_IsHeadHit then
+                isHead = HG_IsHeadHit(ent, nil, dmginfo:GetDamagePosition(), nil)
+            else
+                local headBone = ent:LookupBone("ValveBiped.Bip01_Head1") or ent:LookupBone("head")
+                if headBone then
+                    local headPos = ent:GetBonePosition(headBone)
+                    local dmgPos = dmginfo:GetDamagePosition()
+                    if headPos and dmgPos and dmgPos:Distance(headPos) <= 28 then
+                        isHead = true
+                    end
+                end
+            end
+
+            local isKnifeOrMelee = dmginfo:IsDamageType(DMG_SLASH) or dmginfo:IsDamageType(DMG_CLUB)
+            local inf = dmginfo:GetInflictor()
+            local att = dmginfo:GetAttacker()
+            if not isKnifeOrMelee and IsValid(inf) then
+                local class = inf:GetClass()
+                if inf.isMelee or inf.isKnife or inf.IsKnife or inf.Base == "weapon_melee_base" or string.find(class, "knife") or string.find(class, "kabar") or string.find(class, "melee") or string.find(class, "gurkha") or string.find(class, "crowbar") or string.find(class, "bat") or string.find(class, "axe") or string.find(class, "shovel") then
+                    isKnifeOrMelee = true
+                end
+            end
+            if not isKnifeOrMelee and IsValid(att) and att:IsPlayer() then
+                local wep = att:GetActiveWeapon()
+                if IsValid(wep) then
+                    local class = wep:GetClass()
+                    if wep.isMelee or wep.isKnife or wep.IsKnife or wep.Base == "weapon_melee_base" or string.find(class, "knife") or string.find(class, "kabar") or string.find(class, "melee") or string.find(class, "gurkha") or string.find(class, "crowbar") or string.find(class, "bat") or string.find(class, "axe") or string.find(class, "shovel") then
+                        isKnifeOrMelee = true
+                    end
+                end
+            end
+
+            if isHead and not isKnifeOrMelee then
+                local wepClass = ""
+                if IsValid(inf) then wepClass = inf:GetClass() end
+                if IsValid(att) and att:IsPlayer() and IsValid(att:GetActiveWeapon()) then
+                    wepClass = att:GetActiveWeapon():GetClass()
+                end
+                wepClass = string.lower(wepClass)
+                local isR8 = (wepClass == "wep_r8") or (wepClass == "weapon_r8") or (string.find(wepClass, "r8") ~= nil)
+                local chance = isR8 and 95 or 65
+                if math.random(1, 100) <= chance then
+                    if HG_DoHeadshotKill then
+                        HG_DoHeadshotKill(ply, ent, dmginfo:GetDamagePosition(), dmginfo:GetDamageForce():GetNormalized(), att, inf)
+                    else
+                        ent:SetNWBool("HeadExploded", true)
+                        sound.Play("homigrad/headshoot.wav", ent:GetPos(), 85, 100)
+                    end
+                end
+            end
+        end
+        return
+    end
+    if ply.InFake and not ply:InFake() then return end
+    if ply.hgFakeDmgLock then return end
+    if ply:HasGodMode() then return true end
+
+    ply.hgFakeDmgLock = true
+
+    local isHead = false
+    if HG_IsHeadHit then
+        isHead = HG_IsHeadHit(ent, nil, dmginfo:GetDamagePosition(), nil)
+    else
+        local headBone = ent:LookupBone("ValveBiped.Bip01_Head1") or ent:LookupBone("head")
+        if headBone then
+            local headPos = ent:GetBonePosition(headBone)
+            local dmgPos = dmginfo:GetDamagePosition()
+            if headPos and dmgPos and dmgPos:Distance(headPos) <= 28 then
+                isHead = true
+            end
+        end
+    end
+
+    local isKnifeOrMelee = dmginfo:IsDamageType(DMG_SLASH) or dmginfo:IsDamageType(DMG_CLUB)
+    local inf = dmginfo:GetInflictor()
+    local att = dmginfo:GetAttacker()
+    if not isKnifeOrMelee and IsValid(inf) then
+        local class = inf:GetClass()
+        if inf.isMelee or inf.isKnife or inf.IsKnife or inf.Base == "weapon_melee_base" or string.find(class, "knife") or string.find(class, "kabar") or string.find(class, "melee") or string.find(class, "gurkha") or string.find(class, "crowbar") or string.find(class, "bat") or string.find(class, "axe") or string.find(class, "shovel") then
+            isKnifeOrMelee = true
+        end
+    end
+    if not isKnifeOrMelee and IsValid(att) and att:IsPlayer() then
+        local wep = att:GetActiveWeapon()
+        if IsValid(wep) then
+            local class = wep:GetClass()
+            if wep.isMelee or wep.isKnife or wep.IsKnife or wep.Base == "weapon_melee_base" or string.find(class, "knife") or string.find(class, "kabar") or string.find(class, "melee") or string.find(class, "gurkha") or string.find(class, "crowbar") or string.find(class, "bat") or string.find(class, "axe") or string.find(class, "shovel") then
+                isKnifeOrMelee = true
+            end
+        end
+    end
+
+    if isHead and not isKnifeOrMelee then
+        if HG_DoHeadshotKill then
+            HG_DoHeadshotKill(ply, ent, dmginfo:GetDamagePosition(), dmginfo:GetDamageForce():GetNormalized(), dmginfo:GetAttacker(), dmginfo:GetInflictor())
+        else
+            ply.HeadPop = true
+            ply:SetNWBool("HeadPop", true)
+            ent:SetNWBool("HeadExploded", true)
+            sound.Play("homigrad/headshoot.wav", ent:GetPos(), 85, 100)
+            ply.isDead = true
+            ply:SetNWBool("isDead", true)
+            ply:SetNWBool("Alive", false)
+            ply:SetNWBool("FakeDeath", true)
+            ent.hgIsDeathCorpse = true
+            ent:SetNWBool("hgDeathCorpse", true)
+            ent:SetNWString("Nick", ply:Nick())
+            ent:SetNWString("PlayerName", ply:Nick())
+            fakePlayers[ply] = nil
+            ply:Kill()
+        end
+        ply.hgFakeDmgLock = nil
+        dmginfo:SetDamage(0)
+        return true
+    end
+
+    local dmg = dmginfo:GetDamage()
+    local pain = dmg * 1.2
+    local bleed = dmg > 15 and (dmg * 0.15) or 0
+    if pain > 0 then
+        local curPain = ply:GetNWFloat("pain",0) + pain
+        ply:SetNWFloat("pain",curPain)
+        if curPain > 180 and not ply:GetNWBool("Otrub",false) then
+            ply:SetNWBool("Otrub",true)
+        end
+    end
+    if bleed > 0 then
+        ply:SetNWFloat("bleed",ply:GetNWFloat("bleed",0) + bleed)
+    end
+
+    local copy = DamageInfo()
+    copy:SetDamage(dmg)
+    copy:SetDamageType(dmginfo:GetDamageType())
+    copy:SetAttacker(IsValid(dmginfo:GetAttacker()) and dmginfo:GetAttacker() or ply)
+    copy:SetInflictor(IsValid(dmginfo:GetInflictor()) and dmginfo:GetInflictor() or ent)
+    copy:SetDamagePosition(dmginfo:GetDamagePosition())
+    copy:SetDamageForce(dmginfo:GetDamageForce())
+    ply:TakeDamageInfo(copy)
+
+    local newHp = math.max(0, ply:Health() - dmg)
+    ply:SetHealth(newHp)
+
+    local isDeadNow = (newHp <= 0)
+    if isDeadNow and (ply:Alive() or not ply.isDead) then
+        ply.isDead = true
+        ply:SetNWBool("isDead",true)
+        ply:SetNWBool("Alive",false)
+        ply:SetNWBool("FakeDeath",true)
+        if IsValid(ent) then
+            ent.hgIsDeathCorpse = true
+            ent:SetNWBool("hgDeathCorpse",true)
+            ent:SetNWString("Nick",ply:Nick())
+            ent:SetNWString("PlayerName",ply:Nick())
+            clearGrab(ent.ZacConsLH)
+            clearGrab(ent.ZacConsRH)
+            ent.ZacConsLH,ent.ZacConsRH = nil,nil
+        end
+        fakePlayers[ply] = nil
+        ply:Kill()
+    end
+
+    ply.hgFakeDmgLock = nil
+
+    dmginfo:SetDamage(0)
+    return true
+end)

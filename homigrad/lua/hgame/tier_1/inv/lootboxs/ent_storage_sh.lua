@@ -1,0 +1,109 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgame/tier_1/inv/lootboxs/ent_storage_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:4 <
+]]
+
+-- "addons\\homigrad\\lua\\hgame\\tier_1\\inv\\lootboxs\\ent_storage_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ENT = oop.Reg("ent_storage","base_entity")
+if not ENT then return end
+
+ENT.Type = "anim"
+ENT.Author = "0oa"
+ENT.Spawnable = true
+ENT.AdminSpawnable = false
+
+ENT.PrintName = "Контейнер"
+ENT.Category = "Homigrad"
+
+ENT.WorldModel = "models/homigrad/creates/low.mdl"
+ENT.DrawWeaponSelection = DrawWeaponSelection
+ENT.OverridePaintIcon = OverridePaintIcon
+ENT.dwsPos = Vector(75,75,45)
+ENT.dwsItemPos = Vector(0,0,0)
+
+ENT.Name = "storage"
+
+if SERVER then
+    function ENT:Initialize()
+        self:SetModel(self.WorldModel)
+    
+        self:SetMoveType(MOVETYPE_VPHYSICS)
+        self:PhysicsInit(SOLID_VPHYSICS)
+        self:SetSolid(SOLID_VPHYSICS)
+        self:SetUseType(SIMPLE_USE)
+
+        self:GetPhysicsObject():SetMass(40)
+
+        local inv = InvCreate(8,2):SetParent(self,"storage")
+        self.inv = inv
+
+        inv.name = self.Name
+
+        inv.OnOpen = function() if IsValid(self) then self:EmitSound("homigrad/vgui/item_drop.wav") end end
+        inv.OnClose = function() if IsValid(self) then self:EmitSound("homigrad/vgui/item_drop.wav",75,80) end end
+        inv.Think = InvThinkStorage
+
+        self.health = 500
+    end
+
+    function ENT:Use(ply)
+        if not ply:IsLookOn(self) or self.isGhost then return end
+
+        self.inv:Open(ply)
+    end
+
+    function ENT:OnTakeDamage(dmg)
+        self.health = self.health - dmg:GetDamage()
+        if self.health <= 0 then self:Remove() end
+    end
+
+    function ENT:OnRemove()
+        if self.inv and not homigrad_cleaning_map and not GetGlobalBool("MapCleaning", false) then
+            InvDestroy(self.inv)
+        end
+    end
+
+    ENT:Duplicate("Save Items",
+    function(self,data)
+        local saves = {}
+
+        for i,item in pairs(self.inv:GetAllItems()) do
+            saves[i] = {item.x,item.y,EntCopy(item.ent)}
+        end
+
+        data.items = saves
+    end,
+    function(self,data)
+        for i,item in pairs(data.items) do
+            local ent = EntPaste(item[3])
+            
+            if not self.inv:AddEnt(ent,item[1],item[2]) then ent:Remove() end
+        end
+    end)
+
+    function ENT:CanPhysgun() return true end
+    function ENT:CanPhysgunFreeze() return true end
+
+    return
+else
+    function ENT:CanPhysgun() return true end
+    function ENT:CanPhysgunFreeze() return true end
+    ENT.HUDTarget = oop.listClass.ent_lootbox_low[1].HUDTarget
+end
+
+

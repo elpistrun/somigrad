@@ -1,0 +1,188 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad_donat/lua/hinit/donat/inventory/items/tier_1/item/tier_0_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad_donat\\lua\\hinit\\donat\\inventory\\items\\tier_1\\item\\tier_0_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ITEM = DonatItem_Reg("item",{"base","base_use"},true)
+if not ITEM then return INCLUDE_BREAK end
+
+DonatItemSpawnDelay = 5
+
+ITEM.type = "4_items"
+
+DonatItemsList = DonatItemsList or {}
+
+function ITEM:GetItemInfo()
+    return DonatItemsList[self.data.item or ""]
+end
+
+local scripted_ents_Get = scripted_ents.Get
+local weapons_Get = weapons.Get
+
+function ITEM:GetItemEntityClass()
+    local info = self:GetItemInfo()
+    if not info then return end
+
+    local ent = info.ent
+    if ent then return scripted_ents_Get(ent),ent end
+
+    ent = info.swep
+    if ent then return weapons_Get(ent),ent end
+end
+
+function ITEM:GetPrintName()
+    local ent,ClassName = self:GetItemEntityClass()
+    if not ent then return "Missing Item" end
+
+    return ent.PrintName or ClassName
+end
+
+local empty = {}
+
+function ITEM:GetCountUse()
+    return self.data.countUse or (self:GetItemInfo() or empty).countUse or 250
+end
+
+function ITEM:GetDesc()
+    return (self:GetItemEntityClass() or empty).Instructions or ""
+end
+
+function ITEM:GetRaryType()
+    return (self:GetItemInfo() or empty).raryType or "common"
+end
+
+if SERVER then return end
+
+local startLock = 0
+
+function ITEM:DrawObject(w,h,panel,desc)
+    local ent,ClassName = self:GetItemEntityClass()
+    if not ent then return end
+
+    if ent.WorldModel and ent.dwsItemPos then
+        local mdl = self:GetCSMByID(ent.WorldModel)
+
+        self:OpenScene(w,h,panel,20)
+            mdl:SetPos(ent.dwsItemPos or Vector())
+            mdl:SetAngles(ent.dwsItemAng or Angle())
+            mdl:DrawModel()
+        self:CloseScene(w,h,panel)
+    elseif ent.IconOverride then
+        surface.SetMaterial(ent.IconOverride)
+        surface.SetDrawColor(255,255,255)
+        surface.DrawTexturedRect(0,0,w,h)
+    else
+        local mat = EntityIcon(ClassName)
+
+        if not mat:IsError() then
+            surface.SetMaterial(mat)
+            surface.SetDrawColor(255,255,255)
+            surface.DrawTexturedRect(0,0,w,h)
+        end
+    end
+
+    self:DrawCountUse(w,h,panel,desc)
+end
+
+local colorBlack = Color(0,0,0,245)
+local colorWhite = Color(255,255,255,245)
+
+local wait
+
+function ITEM:CreateDescPanelItem(panel)
+    local item = self
+    local butt = oop.CreatePanel("v_button",panel):ad(function(self,w,h) self:setSize(w,h/3) end)
+    function butt:Draw(w,h)
+        local k = math.max((item.errorStart or 0) - RealTime() + 3,0) / 3
+
+        if k > 0 then
+            self:SetIsNotClickable(true)
+
+            surface.SetDrawColor(255,0,0,75)
+            surface.DrawRect(0,0,w,h)
+
+            surface.SetDrawColor(255,0,0,200)
+            draw.GradientDown(0,0,w,h)
+
+            draw.SimpleText(L(tostring(item.error)),"H.25",w/2,h/2,self:IsHovered() and colorWhite or colorBlack,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)
+
+            return
+        end
+
+        if not LocalPlayer():Alive() then
+            self:SetIsNotClickable(true)
+
+            surface.SetDrawColor(255,0,0,75)
+            surface.DrawRect(0,0,w,h)
+
+            surface.SetDrawColor(255,0,0,200)
+            draw.GradientDown(0,0,w,h)
+
+            draw.SimpleText("ВЫ МЕРТВЫ","H.45",w/2,h/2,self:IsHovered() and colorWhite or colorBlack,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)
+        elseif (startLock or 0) + DonatItemSpawnDelay > RealTime() then
+            self:SetIsNotClickable(true)
+
+            surface.SetDrawColor(125,125,125,75)
+            surface.DrawRect(0,0,w,h)
+
+            surface.SetDrawColor(125,125,125,200)
+            draw.GradientDown(0,0,w,h)
+
+            draw.SimpleText(math.floor((startLock + DonatItemSpawnDelay - RealTime()) * 10) / 10 .. "s","H.45",w/2,h/2,colorBlack,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)
+        else
+            self:SetIsNotClickable(false)
+
+            surface.SetDrawColor(0,255,0,75)
+            surface.DrawRect(0,0,w,h)
+
+            surface.SetDrawColor(0,255,0,200)
+            draw.GradientDown(0,0,w,h)
+
+            draw.SimpleText("ВЫДАТЬ","H.45",w/2,h/2,self:IsHovered() and colorWhite or colorBlack,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)
+        end
+    end
+
+    function butt.OnClick()
+        if wait then return end
+        wait = true
+
+        self:SendUse()
+    end
+end
+
+function ITEM:CreateDescPanel(panel)
+    if panel.type == "shop" then return end
+    
+    self:CreateDescPanelItem(panel)
+end
+
+function ITEM:InputUserCommandPost(cmd)
+    wait = nil
+    
+    if cmd == "use" then
+        startLock = RealTime()
+    end
+end

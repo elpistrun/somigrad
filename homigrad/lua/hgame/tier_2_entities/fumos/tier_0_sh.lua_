@@ -1,0 +1,204 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgame/tier_2_entities/fumos/tier_0_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:115
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad/lua/hgame/tier_2_entities/fumos/tier_0_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:4 <
+]]
+
+-- "addons\\homigrad\\lua\\hgame\\tier_2_entities\\fumos\\tier_0_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local SWEP = oop.Reg("fumos_fumo",{"hg_wep_base"})
+if not SWEP then return end
+
+SWEP.Category = "Fumos"
+SWEP.PrintName = "Fumo"
+SWEP.Spawnable = true
+
+SWEP.NextBotClass = "npc_fumo"
+
+SWEP.WorldModel = "models/tadano/fumo/pack/reimu.mdl"
+SWEP.EnableTransformModel = true
+
+SWEP.wmScale = 1
+SWEP.wmVector1 = Vector(2,0,4)
+SWEP.wmVector2 = Vector(3,2,4)
+
+SWEP.wmAngle1 = Angle(-40,190,-20)
+SWEP.wmAngle2 = Angle(150,190,-20)
+
+SWEP.HoldType = "slam"
+
+SWEP.DrawWeaponSelection = DrawWeaponSelection
+SWEP.OverridePaintIcon = OverridePaintIcon
+
+SWEP.Primary.Automatic = false
+
+SWEP.dwsItemPos = Vector(0,45,-9)
+
+SWEP.SmoothDeployHand = true
+
+if SERVER then
+    function SWEP:PrimaryAttack()
+        if (self.nextPrimaryAttack or 0) > CurTime() then return end
+        self.nextPrimaryAttack = CurTime() + 0.05
+
+        local prekol = math.random(1,10000) == 10000
+        if prekol then self.nextPrimaryAttack = CurTime() + 0.3 end
+
+        self:SetNWFloat("Start",CurTime())
+        self:SetNWFloat("Delay",prekol and 0.3 or 0.2)
+
+        sound.Emit(self:EntIndex(),"homigrad/items/pick.wav",75,1,prekol and 55 or math.random(98,102),self:GetPos())
+        
+        local owner = self:GetOwner()
+        owner:SetNWFloat("Shiza",math.min(owner:GetNWFloat("Shiza",0) + 1,100))
+
+        if math.random(1,100) == 100 then
+            self:Arm()
+        end
+    end
+
+    event.Add("Player Think 1","Fumos",function(ply)
+        if not ply:Alive() then return end
+
+        local shiza = ply:GetNWFloat("Shiza",0)
+
+        if shiza > 0 then
+            ply:SetNWFloat("Shiza",shiza - 1)
+        end
+    end)
+
+    event.Add("Breath Ply","Shiza",function(ply,delay)
+        local shiza = ply:GetNWFloat("Shiza",0) / 100
+
+        if shiza > 0 then
+            delay[1] = math.min(delay[1],1 - shiza * 0.7)
+        end
+    end)
+
+    event.Add("Player Spawn","Shiza",function(ply)
+        ply:SetNWFloat("Shiza",0)
+    end)
+
+    function SWEP:Reload()
+        if (self.nextReload or 0) > CurTime() then return end
+        self.nextReload = CurTime() + 0.5
+        
+        self:SetNWBool("Mode",not self:GetNWBool("Mode"))
+    end
+    
+    function SWEP:Arm()
+        local owner = self:GetOwner()
+        if IsValid(owner) then owner:DropWeapon(self) end
+
+        self:SetNWBool("Arm",true)
+
+        sound.Emit(self:EntIndex(),"homigrad/scp/fumo/jump.mp3",120,1,100,self:GetPos())
+
+        timer.Simple(10,function()
+            if not IsValid(self) then return end
+
+            self:Remove()
+
+            local nextbot = ents.Create(self.NextBotClass)
+            nextbot:SetPos(self:GetPos())
+            nextbot:Spawn()
+        end)
+    end
+
+    function SWEP:CanPickup(ply)
+        if self:GetNWBool("Arm") then ply:PickupObject(self) return false end
+    end
+
+    local fumos = {}
+
+    hook.Add("OnEntityCreated","Replcae",function(prop)
+        if not IsValid(prop) or prop:GetClass() != "prop_physics" then return end
+
+        timer.Simple(0,function()
+            if IsValid(prop) and prop:GetModel() then
+                local fumo = fumos[string.lower(prop:GetModel())]
+
+                if fumo then
+                    local ent = ents.Create(fumo)
+                    ent:SetPos(prop:GetPos())
+                    ent:SetAngles(prop:GetAngles())
+                    ent:Spawn()
+                    ent.Spawned = true
+
+                    prop:Remove()
+
+                    ent:PhysWake()
+                end
+            end
+        end)
+    end)
+
+    SWEP:Event_Add("Construct","Fumos",function(class)
+        fumos[string.lower(class[1].WorldModel)] = class[1].ClassName
+    end)
+else
+    event.Add("PreCalcView","Fumos",function(ply,view)
+        if not ply:Alive() then return end
+
+        local shiza = ply:GetNWFloat("Shiza",0) / 100
+
+        view.ang:Add(Angle(math.cos(CurTime() * 2),math.sin(CurTime() * 2)):Mul(15 * shiza))
+
+        view.fov = view.fov - 25 * shiza
+    end)
+
+    hook.Add("HUDPaintBackground","Fumos",function()
+        local ply = LocalPlayer()
+        
+        local shiza = ply:Alive() and ply:GetNWFloat("Shiza",0) / 100 or 0
+
+        if shiza == 0 then
+            if ShizaSound and ShizaSound:IsPlaying() then ShizaSound:Stop() end
+
+            return
+        end
+        
+        if not ShizaSound then
+            ShizaSound = CreateSound(LocalPlayer(),"homigrad/scp/shiza.wav")
+        end
+
+        local volume = shiza
+
+        if not ShizaSound:IsPlaying() then
+            ShizaSound:PlayEx(volume,100)
+        end
+
+        ShizaSound:ChangeVolume(0.2 * volume,0.1)
+
+        surface.SetDrawColor(0,0,0,255 * shiza)
+
+        draw.GradientUp(0,0,ScrW(),ScrH() * 2)
+    end)
+end
+
+function SWEP:AnimationBonesPlayer(owner)
+    local anim = math.max(self:GetNWFloat("Start",0) - CurTime(),0) / self:GetNWFloat("Delay",1)
+
+    owner:AddBoneAng("rhand",Angle(45 * anim,25 * anim,0))
+
+    owner:AddBoneAng("rupperarm",Angle(-10,-30,30))
+    owner:AddBoneAng("rforearm",Angle(0,0,0))
+
+    self.wmAngle = self:GetNWBool("Mode") and self.wmAngle2 or self.wmAngle1
+    self.wmVector = self:GetNWBool("Mode") and self.wmVector2 or self.wmVector1
+end

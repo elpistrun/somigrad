@@ -1,0 +1,54 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgame/tier_1/inv/ent_resource_base/tier_0_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:4 <
+]]
+
+-- "addons\\homigrad\\lua\\hgame\\tier_1\\inv\\ent_resource_base\\tier_0_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ENT = oop.Reg("ent_resource_base",{"base_entity"},true)
+if not ENT then return INCLUDE_BREAK end
+
+ENT.PrintName = "Resource Base"
+ENT.Category = L("entities_category_resources")
+ENT.Spawnable = false
+
+ENT.InvCountLimit = 10
+
+function ENT:InvMax() return self.InvCountLimit end
+function ENT:GetInvCount() return self:GetNWInt("resource") end
+function ENT:SetInvCount(value) return self:SetNWInt("resource",value) end
+
+if SERVER then return end
+
+function ENT:DrawInv(item,w,h,butt)
+	surface.SetMaterial(self.InventoryIcon)
+	local size = h - 14 + butt.hovered * 5
+
+	surface.SetDrawColor(255,255,255)
+	surface.DrawTexturedRect(w / 2 - size / 2 + 1,h / 2 - size / 2 + 1,size,size)
+
+	draw.SimpleText("x" .. item.count,"InvFont",4,2)
+end
+
+local white = Color(255,255,255)
+
+function ENT:HUDTarget(ply,k,w,h)
+    white.a = 255 * k * (1 - InvOpenK)
+
+    draw.SimpleText(L(self.PrintName),"H.18",w / 2,h / 2 - 50 * (1 - k),white,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)
+end
+

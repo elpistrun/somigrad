@@ -1,0 +1,76 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hgamemode/roundsystem/levels/riot/init_tier_0_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:8 <
+]]
+
+-- "addons\\homigrad\\lua\\hgamemode\\roundsystem\\levels\\riot\\init_tier_0_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local Level = oop.Reg("level_riot","level_base",true)
+if not Level then return INCLUDE_BREAK end
+
+Level.ShouldSpawnLoot = true
+Level.PropBreakLoot = true
+Level:SetEndType("team")
+
+Level.red = {"riot_rebels",Color(75,45,45),
+	weapons = {"wep_food_cannerburger"},
+	main_weapon = {"wep_gnade_molotov","weapon_per4ik","wep_pnev"},
+	secondary_weapon = {"melee_metalbat", "melee_bat","melee_pipe"},
+	models = {"models/player/Group01/male_04.mdl","models/player/Group01/male_01.mdl","models/player/Group01/male_02.mdl","models/player/Group01/male_08.mdl"},
+}
+
+Level.blue = {"police",Color(55,55,150),
+	weapons = {"wep_food_cannerburger","weapon_police_bat","weapon_handcuffs","weapon_transmitter"},
+	main_weapon = {"wep_pol870","med_kit","weapon_gnade_flashbang"},
+	models = {"models/monolithservers/mpd/male_04.mdl","models/monolithservers/mpd/male_03.mdl","models/monolithservers/mpd/male_05.mdl","models/monolithservers/mpd/male_02.mdl"},
+	armors = {
+		{"Riot-Helmet",Color(125,125,125)},
+		{{{"ent_jack_gmod_ezarmor_kora_kulon_b",Color(255,255,255)},{"ent_jack_gmod_ezarmor_thorcrv",Color(255,255,255)}}}
+	}
+}
+
+Level.teamEncoder = {
+	[1] = "red",
+	[2] = "blue"
+}
+
+
+if SERVER then return end
+
+function Level:DrawScreen(lply,k)
+    local name,color = self:GetTeamName(lply)
+
+    local w,h = ScrW(),ScrH()
+
+	draw.DrawText(L("you_team",L(name)),"H.25",w / 2,h / 2,cname,TEXT_ALIGN_CENTER)
+	draw.DrawText("RIOT","H.45",w / 2,h / 8,cpurple,TEXT_ALIGN_CENTER)
+
+	if lply:Team() == 2 then
+		draw.DrawText(L("riot_loadscreen_team2"),"H.25",w / 2,h/ 1.2,cgray,TEXT_ALIGN_CENTER)
+	else
+		draw.DrawText(L("riot_loadscreen_team1"),"H.25",w/ 2,h / 1.2,cgray,TEXT_ALIGN_CENTER)
+	end
+end
+
+function Level:HUDPaint()
+    local lply = LocalPlayer()
+
+	if self:DrawLoadScreen() then return end
+
+	self:DrawRoundTime()
+	self:DrawCenter()
+end

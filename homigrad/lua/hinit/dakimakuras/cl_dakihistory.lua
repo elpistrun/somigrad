@@ -1,0 +1,98 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad/lua/hinit/dakimakuras/cl_dakihistory.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:149
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad\\lua\\hinit\\dakimakuras\\cl_dakihistory.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+Dakimakuras = Dakimakuras or {}
+Dakimakuras.History = Dakimakuras.History or {}
+Dakimakuras.Blacklist = Dakimakuras.Blacklist or {}
+
+function Dakimakuras.RemoveDaki( Front, Back, ShouldSave )
+	for Ind, Data in pairs( Dakimakuras.History )do
+		if( Data.Front == Front and Data.Back == Back )then
+			table.remove( Dakimakuras.History, Ind )
+		end
+	end
+
+	if( ShouldSave )then
+		Dakimakuras.Save()
+	end
+end
+
+function Dakimakuras.RegisterDaki( Front, Back, IsNSFW )
+	Dakimakuras.RemoveDaki( Front, Back )
+
+	table.insert(Dakimakuras.History, 1, {
+		["IsNSFW"] = IsNSFW;
+		["Front"] = Front;
+		["Back"] = Back;
+	})
+
+    if IsNSFW then
+        RunConsoleCommand("dakimakura_nsfw", 1)
+    end
+
+	Dakimakuras.Save()
+end
+
+function Dakimakuras.BlacklistUser( SteamId, Bool )
+	Dakimakuras.Blacklist[ SteamId ] = ( Bool == true and true or nil )
+	Dakimakuras.Save()
+
+	for _, ent in pairs( ents.FindByClass("prop_dakimakura") )do
+		if( ent:GetDegenerate() == SteamId )then
+			ent:UpdateImages()
+		end
+	end
+end
+
+function Dakimakuras.Save()
+	local RawBlacklist = util.TableToJSON( Dakimakuras.Blacklist )
+	local RawHistory = util.TableToJSON( Dakimakuras.History )
+	cookie.Set("daki-blacklist", RawBlacklist )
+	cookie.Set("daki-history", RawHistory )
+end
+
+function Dakimakuras.Load()
+	local RawBlacklist = cookie.GetString("daki-blacklist", "{}" )
+	local RawHistory = cookie.GetString("daki-history", "{}" )
+	Dakimakuras.Blacklist = util.JSONToTable( RawBlacklist )
+	Dakimakuras.History = util.JSONToTable( RawHistory )
+
+	for _, Dakimakura in pairs( Dakimakuras.History ) do
+		Dakimakura.IsNSFW = (Dakimakura.IsNSFW ~= nil and Dakimakura.IsNSFW or false )
+		Dakimakura.Front = Dakimakura.Front or ""
+		Dakimakura.Back = Dakimakura.Back or ""
+	end
+end
+
+hook.Add("InitPostEntity", "Dakimakuras", Dakimakuras.Load)
+
+CreateClientConVar("dakimakura_enable", "1", true, false, "Disable the pesky bodypillows that haunt you in your dreams")
+cvars.AddChangeCallback("dakimakura_enable", function( Name, Old, New )
+	for _, ent in pairs( ents.FindByClass("prop_dakimakura") )do
+		ent:UpdateImages()
+	end
+end)
+
+CreateClientConVar("dakimakura_nsfw", "0", true, false, "Disable this for when the pillows become too hot to handle")
+cvars.AddChangeCallback("dakimakura_nsfw", function( Name, Old, New )
+	for _, ent in pairs( ents.FindByClass("prop_dakimakura") )do
+		ent:UpdateImages()
+	end
+end)

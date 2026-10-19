@@ -1,0 +1,63 @@
+--[[
+    > File stolen by <
+     __   ___      __  __                  ___ ___                ___  __   __   __               ___
+    |__) |__  |\ |  / /  \ \ / |     |\/| |__   |  |__| \ / |    |__  /  ` / _` /  \ |\ | | |\ | |__
+    |__) |___ | \| /_ \__/  |  |___  |  | |___  |  |  |  |  |___ |___ \__, \__> \__/ | \| | | \| |___
+
+    > Server: My Garry's Mod Server (p2p:76561198879695295) <
+    > File: addons/homigrad_donat/lua/hinit/donat/inventory/items/tier_1/case_key_base/tier_0_sh.lua <
+    > Callstack: addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:117
+addons/homigrad_core/lua/shlib/tier_1/oop/sh_tier_0_main.lua:150
+addons/homigrad_donat/lua/hinit/donat/inventory/items/tier_1/case_key_base/tier_0_sh.lua:3
+[C]:-1
+addons/homigrad_core/lua/shlib/loader.lua:143
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:157
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/shlib/loader.lua:162
+addons/homigrad_core/lua/shlib/loader.lua:169
+addons/homigrad_core/lua/autorun/z_shlib.lua:13
+addons/homigrad_core/lua/shlib/tier_0/sh_event.lua:83
+addons/homigrad_core/lua/shlib/loader.lua:206
+lua/includes/modules/hook.lua:102 <
+]]
+
+-- "addons\\homigrad_donat\\lua\\hinit\\donat\\inventory\\items\\tier_1\\case_key_base\\tier_0_sh.lua"
+-- Retrieved by https://github.com/lewisclark/glua-steal
+local ITEM = DonatItem_Reg("case_key","case",true)
+if not ITEM then return INCLUDE_BREAK end
+
+local empty = {}
+
+function ITEM:GetPrintName()
+    return (self:GetCaseInfo() or empty).keyName or "Missing Key"
+end
+
+function ITEM:CanReceive() return false end
+
+if SERVER then return end
+
+function ITEM:DrawObject(w,h,panel,desc)
+    local caseInfo = self:GetCaseInfo()
+    if not caseInfo then return end
+
+    local mdl = self:GetCSMByID(caseInfo.modelKey)
+
+    if caseInfo.subMaterial0 then
+        mdl:SetSubMaterial(0,caseInfo.subMaterial0)
+    end
+    
+    self:OpenScene(w,h,panel,20)
+        mdl:SetPos(caseInfo.modelKeyVec)
+        mdl:SetAngles(caseInfo.modelKeyAng)
+        mdl:DrawModel()
+    self:CloseScene(w,h,panel)
+end
